@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">iOS Keyboard</string>
+    <string name="ime_name">iOS Keyboard</string>
+    <string name="settings_title">iOS Keyboard Settings</string>
+
+    <!-- Subtypes -->
+    <string name="subtype_en_us">English (US)</string>
+    <string name="subtype_es_es">Spanish (Español)</string>
+    <string name="subtype_fr_fr">French (Français)</string>
+    <string name="subtype_de_de">German (Deutsch)</string>
+    <string name="subtype_ru_ru">Russian (Русский)</string>
+    <string name="subtype_ar">Arabic (العربية)</string>
+
+    <!-- Settings Sections -->
+    <string name="section_activation">Activation</string>
+    <string name="section_appearance">Appearance</string>
+    <string name="section_audio_haptics">Key Sounds &amp; Haptics</string>
+    <string name="section_typing">Typing &amp; Autocorrect</string>
+    <string name="section_languages">Languages &amp; Layouts</string>
+    <string name="section_clipboard">Clipboard Manager</string>
+    <string name="section_translation">Inline Translation</string>
+    <string name="section_about">About &amp; Privacy</string>
+
+    <!-- Settings Items -->
+    <string name="enable_keyboard">Enable iOS Keyboard</string>
+    <string name="enable_keyboard_desc">Enable keyboard in Android system settings</string>
+    <string name="select_keyboard">Switch Active Keyboard</string>
+    <string name="select_keyboard_desc">Set iOS Keyboard as current input method</string>
+
+    <string name="theme_title">Theme</string>
+    <string name="theme_system">Match System</string>
+    <string name="theme_light">iOS Light</string>
+    <string name="theme_dark">iOS Dark</string>
+
+    <string name="key_height">Keyboard Height</string>
+    <string name="key_popups">Key Popups (Magnifier)</string>
+    <string name="key_popups_desc">Show enlarged key bubble above finger</string>
+
+    <string name="sound_enabled">Keystroke Sounds</string>
+    <string name="sound_volume">Keystroke Sound Volume</string>
+    <string name="haptics_enabled">Haptic Feedback</string>
+    <string name="haptics_strength">Taptic Engine Haptic Intensity</string>
+
+    <string name="autocorrect">Auto-Correction</string>
+    <string name="predictive_text">Predictive Text Bar</string>
+    <string name="gesture_typing">Glide / Gesture Typing</string>
+    <string name="double_space_period">Double-Tap Space for Period</string>
+    <string name="spacebar_trackpad">Spacebar Cursor Trackpad</string>
+    <string name="spacebar_trackpad_desc">Long press spacebar and drag to navigate cursor</string>
+
+    <string name="clipboard_history">Clipboard History</string>
+    <string name="clipboard_auto_suggest">Suggest Recent Clipboard in Strip</string>
+    <string name="clear_clipboard">Clear Clipboard History</string>
+
+    <string name="translation_enabled">Inline Translation Tool</string>
+    <string name="translation_target">Default Target Language</string>
+    <string name="translation_endpoint">LibreTranslate API Endpoint</string>
+
+    <string name="privacy_title">100% Offline Privacy Guarantee</string>
+    <string name="privacy_desc">iOS Keyboard never logs keystrokes, passwords, or personal data. No analytics or tracking.</string>
+    <string name="version_title">Version</string>
+    <string name="license_title">Open Source License</string>
+</resources>

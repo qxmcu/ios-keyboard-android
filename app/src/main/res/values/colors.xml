@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- iOS Palette Light -->
+    <color name="ios_light_bg">#D1D5DB</color>
+    <color name="ios_light_key_bg">#FFFFFF</color>
+    <color name="ios_light_key_shadow">#898A8D</color>
+    <color name="ios_light_modifier_key_bg">#AFB4BD</color>
+    <color name="ios_light_text">#000000</color>
+    <color name="ios_light_accent_blue">#007AFF</color>
+    <color name="ios_light_strip_bg">#ECEFF2</color>
+
+    <!-- iOS Palette Dark -->
+    <color name="ios_dark_bg">#1C1C1E</color>
+    <color name="ios_dark_key_bg">#2C2C2E</color>
+    <color name="ios_dark_key_shadow">#121213</color>
+    <color name="ios_dark_modifier_key_bg">#3A3A3C</color>
+    <color name="ios_dark_text">#FFFFFF</color>
+    <color name="ios_dark_accent_blue">#0A84FF</color>
+    <color name="ios_dark_strip_bg">#252528</color>
+
+    <!-- iOS System Colors -->
+    <color name="ios_green">#34C759</color>
+    <color name="ios_red">#FF3B30</color>
+    <color name="ios_gray">#8E8E93</color>
+    <color name="ios_separator_light">#C6C6C8</color>
+    <color name="ios_separator_dark">#38383A</color>
+</resources>
