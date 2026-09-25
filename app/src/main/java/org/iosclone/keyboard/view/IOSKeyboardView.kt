@@ -41,9 +41,30 @@ class IOSKeyboardView @JvmOverloads constructor(
     var currentTheme: ThemeColors = themeResolver.resolveTheme(preferences.themeMode)
         private set
 
+    var bottomInset: Float = 0f
+
+    fun setBottomInset(insetPx: Int) {
+        val newInset = insetPx.toFloat()
+        if (bottomInset != newInset) {
+            bottomInset = newInset
+            val w = if (width > 0) width.toFloat() else measuredWidth.toFloat()
+            val h = if (height > 0) height.toFloat() else measuredHeight.toFloat()
+            if (w > 0 && h > 0) {
+                layout?.measure(w, h, resources.displayMetrics.density, bottomInset)
+            }
+            requestLayout()
+            invalidate()
+        }
+    }
+
     var layout: KeyboardLayout? = null
         set(value) {
             field = value
+            val w = if (width > 0) width.toFloat() else measuredWidth.toFloat()
+            val h = if (height > 0) height.toFloat() else measuredHeight.toFloat()
+            if (w > 0 && h > 0) {
+                value?.measure(w, h, resources.displayMetrics.density, bottomInset)
+            }
             requestLayout()
             invalidate()
         }
@@ -125,15 +146,18 @@ class IOSKeyboardView @JvmOverloads constructor(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val density = resources.displayMetrics.density
-        val baseHeight = (220f * density * preferences.keyboardHeightFactor).toInt()
-        val height = resolveSize(baseHeight, heightMeasureSpec)
+        // iOS standard keyboard height: 216dp in portrait + bottom inset
+        val baseHeight = (220f * density * preferences.keyboardHeightFactor) + bottomInset
+        val height = baseHeight.toInt()
         setMeasuredDimension(width, height)
+
+        layout?.measure(width.toFloat(), height.toFloat(), density, bottomInset)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val density = resources.displayMetrics.density
-        layout?.measure(w.toFloat(), h.toFloat(), density)
+        layout?.measure(w.toFloat(), h.toFloat(), density, bottomInset)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -191,7 +215,9 @@ class IOSKeyboardView @JvmOverloads constructor(
     ) {
         val bounds = key.bounds
         val isModifier = key.isModifier()
-        val isSpecialBlueReturn = (key.keyType == KeyType.RETURN && layout?.returnKeyLabel?.lowercase() != "return")
+        val retLabel = layout?.returnKeyLabel?.lowercase() ?: "return"
+        val isSpecialBlueReturn = (key.keyType == KeyType.RETURN && (retLabel == "search" || retLabel == "go" || retLabel == "send"))
+        val isShiftActive = key.keyType == KeyType.SHIFT && (layout?.mode == KeyboardMode.UPPERCASE || layout?.mode == KeyboardMode.CAPS_LOCK)
 
         // Dim keys during trackpad mode
         val alphaMultiplier = if (isTrackpadMode) 0.4f else 1.0f
@@ -205,6 +231,7 @@ class IOSKeyboardView @JvmOverloads constructor(
         // Key surface background
         val surfaceColor = when {
             isSpecialBlueReturn -> currentTheme.returnKeyBlue
+            isShiftActive -> currentTheme.modifierKeyBackgroundPressed
             isModifier -> if (isPressed) currentTheme.modifierKeyBackgroundPressed else currentTheme.modifierKeyBackground
             else -> if (isPressed) currentTheme.keyBackgroundPressed else currentTheme.keyBackground
         }
@@ -216,7 +243,8 @@ class IOSKeyboardView @JvmOverloads constructor(
         when (key.keyType) {
             KeyType.SHIFT -> {
                 val iconName = if (layout?.mode == KeyboardMode.CAPS_LOCK) "ic_shift_caps" else "ic_shift"
-                drawKeyIcon(canvas, iconName, bounds, currentTheme.textPrimary, density)
+                val tint = if (isShiftActive && currentTheme.isDark) 0xFF000000.toInt() else currentTheme.textPrimary
+                drawKeyIcon(canvas, iconName, bounds, tint, density)
             }
             KeyType.DELETE -> {
                 drawKeyIcon(canvas, "ic_backspace", bounds, currentTheme.textPrimary, density)
@@ -228,20 +256,29 @@ class IOSKeyboardView @JvmOverloads constructor(
                 drawKeyIcon(canvas, "ic_dictation", bounds, currentTheme.textPrimary, density)
             }
             KeyType.RETURN -> {
-                val label = layout?.returnKeyLabel ?: "return"
+                val displayLabel = layout?.returnKeyLabel ?: "return"
                 textPaint.color = if (isSpecialBlueReturn) currentTheme.returnKeyText else currentTheme.textPrimary
-                textPaint.textSize = (if (label.length > 3) 15f else 16f) * density
-                drawCenteredText(canvas, label, bounds, textPaint)
+                textPaint.textSize = (if (displayLabel.length > 4) 14f else 15.5f) * density
+                textPaint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                drawCenteredText(canvas, displayLabel, bounds, textPaint)
             }
             KeyType.SPACE -> {
                 textPaint.color = currentTheme.textSecondary
                 textPaint.textSize = 14f * density
-                val label = if (isTrackpadMode) "" else (layout?.language?.displayName ?: "space")
-                drawCenteredText(canvas, label, bounds, textPaint)
+                textPaint.typeface = android.graphics.Typeface.DEFAULT
+                val spaceText = if (isTrackpadMode) "" else (if (layout?.language == LanguageLayout.QWERTY) "space" else layout?.language?.displayName ?: "space")
+                drawCenteredText(canvas, spaceText, bounds, textPaint)
+            }
+            KeyType.SWITCH_NUMERIC, KeyType.SWITCH_ALPHA, KeyType.SWITCH_SYMBOL -> {
+                textPaint.color = currentTheme.textPrimary
+                textPaint.textSize = 15f * density
+                textPaint.typeface = android.graphics.Typeface.DEFAULT
+                drawCenteredText(canvas, key.label, bounds, textPaint)
             }
             else -> {
                 textPaint.color = currentTheme.textPrimary
-                textPaint.textSize = (if (key.label.length > 2) 14f else 22f) * density
+                textPaint.textSize = (if (key.label.length > 1) 16f else 23f) * density
+                textPaint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
                 drawCenteredText(canvas, key.label, bounds, textPaint)
             }
         }
@@ -293,7 +330,7 @@ class IOSKeyboardView @JvmOverloads constructor(
                 // Check one-handed docking toggle
                 if (l.oneHandedMode != OneHandedMode.NORMAL && l.oneHandedSideButtonBounds.contains(x, y)) {
                     l.oneHandedMode = if (l.oneHandedMode == OneHandedMode.LEFT_DOCKED) OneHandedMode.RIGHT_DOCKED else OneHandedMode.LEFT_DOCKED
-                    l.measure(width.toFloat(), height.toFloat(), resources.displayMetrics.density)
+                    l.measure(width.toFloat(), height.toFloat(), resources.displayMetrics.density, bottomInset)
                     invalidate()
                     return true
                 }

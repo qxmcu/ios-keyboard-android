@@ -1,6 +1,8 @@
 package org.iosclone.keyboard.view
 
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.util.AttributeSet
 import android.view.Gravity
@@ -22,6 +24,11 @@ class SuggestionStripView @JvmOverloads constructor(
     private val leftCandidateTv: TextView
     private val centerCandidateTv: TextView
     private val rightCandidateTv: TextView
+    private val sep1: View
+    private val sep2: View
+    private val dividerPaint = Paint().apply {
+        strokeWidth = 1f
+    }
 
     private val quickPasteContainer: LinearLayout
     private val quickPasteTv: TextView
@@ -41,6 +48,7 @@ class SuggestionStripView @JvmOverloads constructor(
     private var currentQuickPasteText: String? = null
 
     init {
+        setWillNotDraw(false)
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
         val pad = (6 * resources.displayMetrics.density).toInt()
@@ -54,13 +62,15 @@ class SuggestionStripView @JvmOverloads constructor(
         }
 
         leftCandidateTv = createCandidateView(weight = 1.0f)
+        sep1 = createVerticalSeparator().apply { visibility = View.GONE }
         centerCandidateTv = createCandidateView(weight = 1.2f, isCenter = true)
+        sep2 = createVerticalSeparator().apply { visibility = View.GONE }
         rightCandidateTv = createCandidateView(weight = 1.0f)
 
         candidatesLayout.addView(leftCandidateTv)
-        candidatesLayout.addView(createVerticalSeparator())
+        candidatesLayout.addView(sep1)
         candidatesLayout.addView(centerCandidateTv)
-        candidatesLayout.addView(createVerticalSeparator())
+        candidatesLayout.addView(sep2)
         candidatesLayout.addView(rightCandidateTv)
 
         // Quick paste chip container
@@ -169,18 +179,11 @@ class SuggestionStripView @JvmOverloads constructor(
         clipboardBtn.setColorFilter(theme.textSecondary)
         undoBtn.setColorFilter(theme.textSecondary)
 
-        // Separator lines
-        for (i in 0 until childCount) {
-            val child = getChildAt(i)
-            if (child is LinearLayout && child !== quickPasteContainer && child !== actionContainer) {
-                for (j in 0 until child.childCount) {
-                    val subChild = child.getChildAt(j)
-                    if (subChild !is TextView) {
-                        subChild.setBackgroundColor(if (theme.isDark) 0x33FFFFFF else 0x22000000)
-                    }
-                }
-            }
-        }
+        val sepColor = if (theme.isDark) 0x33FFFFFF else 0x22000000
+        sep1.setBackgroundColor(sepColor)
+        sep2.setBackgroundColor(sepColor)
+        dividerPaint.color = if (theme.isDark) 0x2EFFFFFF.toInt() else 0x1F000000
+        invalidate()
     }
 
     fun setSuggestions(result: AutocorrectResult) {
@@ -190,6 +193,13 @@ class SuggestionStripView @JvmOverloads constructor(
         centerCandidateTv.text = if (isAutocorrect) "\"$center\"" else center
         leftCandidateTv.text = result.leftCandidate
         rightCandidateTv.text = result.rightCandidate
+
+        val hasLeft = result.leftCandidate.isNotBlank()
+        val hasCenter = center.isNotBlank()
+        val hasRight = result.rightCandidate.isNotBlank()
+
+        sep1.visibility = if (hasLeft && hasCenter) View.VISIBLE else View.GONE
+        sep2.visibility = if (hasCenter && hasRight) View.VISIBLE else View.GONE
     }
 
     fun showQuickPaste(text: String?) {
@@ -207,5 +217,13 @@ class SuggestionStripView @JvmOverloads constructor(
         centerCandidateTv.text = ""
         leftCandidateTv.text = ""
         rightCandidateTv.text = ""
+        sep1.visibility = View.GONE
+        sep2.visibility = View.GONE
+    }
+
+    override fun onDraw(canvas: Canvas) {
+        super.onDraw(canvas)
+        val y = height.toFloat() - 1f
+        canvas.drawLine(0f, y, width.toFloat(), y, dividerPaint)
     }
 }

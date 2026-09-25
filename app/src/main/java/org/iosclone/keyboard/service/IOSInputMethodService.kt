@@ -12,6 +12,8 @@ import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.FrameLayout
 import android.widget.LinearLayout
+import androidx.core.view.ViewCompat
+import androidx.core.view.WindowInsetsCompat
 import org.iosclone.keyboard.audio.AudioHapticFeedback
 import org.iosclone.keyboard.audio.SoundType
 import org.iosclone.keyboard.clipboard.ClipboardManagerHelper
@@ -208,6 +210,28 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
 
         rootLayout?.addView(contentContainer)
 
+        ViewCompat.setOnApplyWindowInsetsListener(rootLayout!!) { _, insets ->
+            applyBottomInsets(insets)
+            insets
+        }
+
+        rootLayout?.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+            override fun onViewAttachedToWindow(v: View) {
+                ViewCompat.requestApplyInsets(v)
+                ViewCompat.getRootWindowInsets(v)?.let { insets ->
+                    applyBottomInsets(insets)
+                }
+            }
+            override fun onViewDetachedFromWindow(v: View) {}
+        })
+
+        window?.window?.decorView?.let { decor ->
+            ViewCompat.setOnApplyWindowInsetsListener(decor) { _, insets ->
+                applyBottomInsets(insets)
+                insets
+            }
+        }
+
         updateKeyboardLayout()
         applyCurrentTheme()
 
@@ -222,6 +246,12 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
         super.onStartInputView(info, restarting)
+
+        rootLayout?.let { root ->
+            ViewCompat.getRootWindowInsets(root)?.let { insets ->
+                applyBottomInsets(insets)
+            }
+        }
 
         // Determine return key label & action
         val imeAction = (info?.imeOptions ?: 0) and EditorInfo.IME_MASK_ACTION
@@ -251,6 +281,33 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         applyCurrentTheme()
         updateKeyboardLayout()
         showMainKeyboard()
+    }
+
+    private fun applyBottomInsets(insets: WindowInsetsCompat) {
+        val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+        val tappable = insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom
+        val mandatory = insets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures()).bottom
+        val bottomInset = maxOf(navBars, tappable, mandatory)
+
+        keyboardView?.setBottomInset(bottomInset)
+
+        val density = resources.displayMetrics.density
+        val pickerBaseH = (260 * density).toInt()
+        emojiPickerView?.let { picker ->
+            picker.layoutParams = (picker.layoutParams as? FrameLayout.LayoutParams)?.apply {
+                height = pickerBaseH + bottomInset
+            } ?: FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, pickerBaseH + bottomInset)
+            picker.setPadding(0, 0, 0, bottomInset)
+            picker.requestLayout()
+        }
+
+        clipboardDrawerView?.let { drawer ->
+            drawer.layoutParams = (drawer.layoutParams as? FrameLayout.LayoutParams)?.apply {
+                height = pickerBaseH + bottomInset
+            } ?: FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, pickerBaseH + bottomInset)
+            drawer.setPadding(0, 0, 0, bottomInset)
+            drawer.requestLayout()
+        }
     }
 
     private fun applyCurrentTheme() {
