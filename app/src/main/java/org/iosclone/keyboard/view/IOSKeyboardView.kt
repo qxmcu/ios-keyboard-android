@@ -20,6 +20,7 @@ import org.iosclone.keyboard.layout.KeyDefinition
 import org.iosclone.keyboard.layout.KeyType
 import org.iosclone.keyboard.layout.KeyboardLayout
 import org.iosclone.keyboard.layout.KeyboardMode
+import org.iosclone.keyboard.layout.LanguageLayout
 import org.iosclone.keyboard.layout.OneHandedMode
 import org.iosclone.keyboard.service.KeyboardActionListener
 import org.iosclone.keyboard.settings.KeyboardPreferences
