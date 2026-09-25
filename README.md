@@ -1,6 +1,6 @@
 # 🍎 iOS Keyboard for Android (Open-Source Clone)
 
-[![Build & Package APK](https://github.com/org-iosclone/ios-keyboard-android/actions/workflows/build-apk.yml/badge.svg)](https://github.com/org-iosclone/ios-keyboard-android/actions/workflows/build-apk.yml)
+[![Build & Package APK](https://github.com/qxmcu/ios-keyboard-android/actions/workflows/build-apk.yml/badge.svg)](https://github.com/qxmcu/ios-keyboard-android/actions/workflows/build-apk.yml)
 [![License: Apache 2.0](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![Android: 8.0 - 15+](https://img.shields.io/badge/Platform-Android%208.0%20(API%2026)%20--%2015%2B-brightgreen.svg)](https://developer.android.com)
 [![Kotlin: 100%](https://img.shields.io/badge/Kotlin-100%25-purple.svg)](https://kotlinlang.org)
@@ -69,7 +69,7 @@ Hold the `space` bar for >350ms to turn the entire keyboard canvas into a fluid 
 ## 🚀 Installation & Activation Guide
 
 ### Method A: Install Standalone APK
-1. Download `ios-keyboard-release.apk` from the [GitHub Releases](https://github.com/org-iosclone/ios-keyboard-android/releases) section.
+1. Download `ios-keyboard-release.apk` from the [GitHub Releases](https://github.com/qxmcu/ios-keyboard-android/releases) section.
 2. Open the downloaded APK on your Android device and install it (allow installation from unknown sources if prompted).
 3. Open the **iOS Keyboard** app from your home screen / launcher.
 4. Follow the setup prompts:
@@ -94,7 +94,7 @@ Hold the `space` bar for >350ms to turn the entire keyboard canvas into a fluid 
 
 1. **Clone the repository:**
    ```bash
-   git clone https://github.com/org-iosclone/ios-keyboard-android.git
+   git clone https://github.com/qxmcu/ios-keyboard-android.git
    cd ios-keyboard-android
    ```
 
