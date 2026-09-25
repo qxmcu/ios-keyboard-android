@@ -9,16 +9,12 @@
       android:strokeLineCap="round"
       android:fillColor="#00000000"
       android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2z"/>
-  <circle
+  <path
       android:fillColor="#FF000000"
-      android:centerX="8.5"
-      android:centerY="9.5"
-      android:radius="1.5"/>
-  <circle
+      android:pathData="M8.5,9.5m-1.5,0a1.5,1.5 0 1,0 3,0a1.5,1.5 0 1,0 -3,0"/>
+  <path
       android:fillColor="#FF000000"
-      android:centerX="15.5"
-      android:centerY="9.5"
-      android:radius="1.5"/>
+      android:pathData="M15.5,9.5m-1.5,0a1.5,1.5 0 1,0 3,0a1.5,1.5 0 1,0 -3,0"/>
   <path
       android:strokeColor="#FF000000"
       android:strokeWidth="1.8"
