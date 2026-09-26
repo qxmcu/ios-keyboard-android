@@ -144,4 +144,34 @@ object EmojiStickerHelper {
             null
         }
     }
+
+    /**
+     * Copies the authentic iOS Emoji PNG sticker to the system clipboard
+     * allowing users to paste it into any app (Notes, Instagram Story, WhatsApp, Discord).
+     */
+    fun copyStickerToClipboard(context: Context, emoji: String): Boolean {
+        return try {
+            val file = renderEmojiToPng(context, emoji) ?: return false
+            val authority = "${context.packageName}.fileprovider"
+            val uri = FileProvider.getUriForFile(context, authority, file)
+
+            val clipboard = context.getSystemService(Context.CLIPBOARD_SERVICE) as? android.content.ClipboardManager
+            val clip = android.content.ClipData.newUri(context.contentResolver, "iOS Emoji Sticker", uri)
+            clipboard?.setPrimaryClip(clip)
+            true
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to copy sticker to clipboard: ${e.message}", e)
+            false
+        }
+    }
+
+    /**
+     * Detects if device is a Nothing Phone (Nothing OS).
+     */
+    fun isNothingPhone(): Boolean {
+        val m = Build.MANUFACTURER.lowercase()
+        val b = Build.BRAND.lowercase()
+        val model = Build.MODEL.lowercase()
+        return m.contains("nothing") || b.contains("nothing") || model.contains("nothing") || model.contains("a063") || model.contains("a065") || model.contains("ain065")
+    }
 }

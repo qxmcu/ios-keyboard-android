@@ -21,7 +21,7 @@ class DictionaryEngine(private val context: Context) {
     private val tries = mutableMapOf<LanguageLayout, Trie>()
     private val userDb = UserDictionaryDb(context)
 
-    val languageModel = QuantizedLanguageModel()
+    val languageModel = QuantizedLanguageModel(context)
     val textReplacementManager = TextReplacementManager(context)
     val undoManager = AutocorrectUndoManager()
 

@@ -1,0 +1,256 @@
+how are	245
+how is	230
+how was	220
+how do	240
+how did	225
+how can	235
+how about	240
+how much	230
+how many	225
+what are	240
+what is	250
+what was	225
+what do	245
+what did	230
+what time	240
+what about	235
+what if	230
+what happened	235
+where are	240
+where is	245
+where did	230
+where do	235
+when are	230
+when is	240
+when did	225
+when will	235
+why are	230
+why is	235
+why did	230
+why do	235
+why not	240
+who is	240
+who was	230
+who are	235
+who did	220
+how are you	255
+how are things	215
+how is it	245
+how is your	235
+how was your	240
+how do you	250
+how do i	245
+how can i	245
+what do you	255
+what are you	250
+what is your	240
+what time is	245
+where are you	255
+where do you	240
+when will you	245
+thank you	255
+thank you so	250
+thank you very	240
+thank you for	245
+thanks for	250
+thanks for the	245
+thanks for your	240
+thanks so	245
+thanks so much	250
+you are	250
+you are welcome	255
+no problem	250
+no worries	250
+of course	250
+sounds good	255
+sounds great	250
+sounds like	245
+sounds like a	240
+looking forward	250
+looking forward to	255
+let me	255
+let me know	255
+let me know if	250
+let me see	240
+good morning	255
+good night	255
+good afternoon	240
+good luck	250
+have a	255
+have a great	255
+have a good	255
+have a nice	250
+have a safe	240
+have a wonderful	240
+see you	255
+see you soon	255
+see you later	255
+see you tomorrow	250
+talk to	250
+talk to you	255
+i am	250
+i am so	240
+i am going	250
+i am going to	255
+i am on	245
+i am on my	250
+on my way	255
+i am at	240
+i have	250
+i have to	255
+i have a	245
+i have been	240
+i will	250
+i will be	255
+i will let	250
+i will call	245
+i want	245
+i want to	255
+i need	245
+i need to	255
+i can	250
+i can do	245
+i can help	240
+i think	250
+i think so	250
+i think that	245
+i know	245
+i know right	245
+i love	245
+i love you	255
+i love it	250
+i feel	235
+i feel like	245
+i just	250
+i just wanted	245
+i just got	245
+i dont	250
+i don't	255
+i don't know	255
+i don't think	250
+i cannot	240
+i can't	250
+i can't wait	255
+can you	255
+can you please	255
+can you send	245
+can you check	245
+could you	250
+could you please	255
+would you	245
+would you like	250
+would you be	240
+please let	250
+please let me	255
+please send	245
+do you	255
+do you want	255
+do you want to	255
+do you have	255
+do you know	250
+do you think	245
+are you	255
+are you free	250
+are you coming	245
+are you ready	250
+are you sure	250
+let us	240
+let us know	245
+let us know if	240
+please find	240
+please find attached	245
+please find the	240
+attached is	235
+attached is the	240
+as discussed	240
+as discussed earlier	235
+as per	235
+follow up	245
+following up on	245
+just following	240
+just wanted	250
+just wanted to	255
+just checking in	250
+reach out	245
+reach out to	250
+feel free	250
+feel free to	255
+let me know	255
+let me know what	250
+let me know your	245
+keep you	245
+keep you updated	250
+keep you posted	250
+looking forward	255
+looking forward to	255
+looking forward to hearing	250
+looking forward to seeing	250
+looking forward to working	245
+at your	245
+at your earliest	250
+at your convenience	250
+thank you for your time	250
+thank you for your help	255
+thank you for the update	245
+thank you for reaching out	245
+have a great weekend	250
+have a great day	255
+have a great rest of	245
+talk soon	250
+talk to you soon	255
+catch you later	245
+take care	255
+best regards	250
+warm regards	245
+on my way	255
+be there	250
+be there in	255
+be there soon	255
+running a few minutes	245
+running a bit late	250
+running late	250
+see you there	255
+where should we	245
+where should we meet	250
+what time should we	245
+pick you up	250
+drop you off	245
+on the way	255
+on the way home	250
+heading home	250
+heading out	245
+just left	250
+just arrived	250
+let me know when you get	250
+let me know when you are	250
+how was your day	255
+how was your weekend	250
+how is your day	250
+how was your flight	240
+what are you doing	255
+what are you up to	255
+are you up	245
+are you awake	245
+are you busy	250
+wanna grab	245
+wanna grab food	250
+wanna grab dinner	250
+wanna grab lunch	250
+wanna hang out	250
+down to	245
+down to go	245
+sounds like fun	250
+i am down	250
+i would love to	255
+wish you were here	250
+miss you so much	255
+can not wait to see you	255
+can't wait to see you	255
+happy birthday	255
+congratulations on the	250
+so proud of you	255
+thinking of you	250
+hope you feel better	255
+get well soon	255
+hope you have a	255
+hope all is well	255

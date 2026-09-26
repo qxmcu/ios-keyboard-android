@@ -3,6 +3,7 @@ package org.iosclone.keyboard.view
 import android.app.Dialog
 import android.content.Context
 import android.graphics.Color
+import android.graphics.Typeface
 import android.graphics.drawable.ColorDrawable
 import android.graphics.drawable.GradientDrawable
 import android.text.Editable
@@ -35,6 +36,7 @@ class EmojiPickerView @JvmOverloads constructor(
 ) : LinearLayout(context, attrs, defStyleAttr) {
 
     var onEmojiSelected: ((String) -> Unit)? = null
+    var onEmojiLarpRequested: ((String) -> Unit)? = null
     var onBackspaceClicked: (() -> Unit)? = null
     var onBackToAlphaClicked: (() -> Unit)? = null
     var onGlobeClicked: (() -> Unit)? = null
@@ -121,7 +123,7 @@ class EmojiPickerView @JvmOverloads constructor(
 
         adapter = EmojiRecyclerAdapter(
             onItemClick = { emoji -> onEmojiClicked(emoji) },
-            onItemLongClick = { item, anchor -> showSkinToneSelector(item, anchor) }
+            onItemLongClick = { item, anchor -> showEmojiLarpPopup(item, anchor) }
         )
         recyclerView.adapter = adapter
         addView(recyclerView)
@@ -280,40 +282,99 @@ class EmojiPickerView @JvmOverloads constructor(
         onEmojiSelected?.invoke(unicode)
     }
 
-    private fun showSkinToneSelector(item: EmojiItem, anchor: View) {
+    private fun showEmojiLarpPopup(item: EmojiItem, anchor: View) {
         val dialog = Dialog(context)
         dialog.requestWindowFeature(Window.FEATURE_NO_TITLE)
         dialog.window?.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
 
         val density = resources.displayMetrics.density
-        val container = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            val pad = (6 * density).toInt()
+        val rootContainer = LinearLayout(context).apply {
+            orientation = VERTICAL
+            gravity = Gravity.CENTER_HORIZONTAL
+            val pad = (12 * density).toInt()
             setPadding(pad, pad, pad, pad)
             background = GradientDrawable().apply {
-                setColor(if (currentTheme.isDark) Color.parseColor("#3A3A3C") else Color.parseColor("#FFFFFF"))
-                cornerRadius = 12f * density
-                setStroke((1 * density).toInt(), if (currentTheme.isDark) 0x33FFFFFF else 0x22000000)
+                setColor(if (currentTheme.isDark) Color.parseColor("#E62C2C2E") else Color.parseColor("#F2FFFFFF"))
+                cornerRadius = 16f * density
+                setStroke((1.5f * density).toInt(), if (currentTheme.isDark) 0x33FFFFFF else 0x1A000000)
             }
         }
 
-        for (tone in EmojiSkinTone.entries) {
-            val variant = tone.applyTo(item.unicode)
-            val btn = EmojiTextView(context).apply {
-                text = variant
-                textSize = 26f
+        // Large Preview of Apple Emoji
+        val previewTv = EmojiTextView(context).apply {
+            text = item.unicode
+            textSize = 38f
+            gravity = Gravity.CENTER
+            layoutParams = LayoutParams((64 * density).toInt(), (64 * density).toInt()).apply {
+                bottomMargin = (8 * density).toInt()
+            }
+        }
+        rootContainer.addView(previewTv)
+
+        var currentSelectedVariant = item.unicode
+
+        // If supports skin tone, show horizontal tone picker
+        if (item.supportsSkinTone) {
+            val tonesRow = LinearLayout(context).apply {
+                orientation = HORIZONTAL
                 gravity = Gravity.CENTER
-                val size = (42 * density).toInt()
-                layoutParams = LayoutParams(size, size)
-                setOnClickListener {
-                    onEmojiClicked(variant)
-                    dialog.dismiss()
+                layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                    bottomMargin = (10 * density).toInt()
                 }
             }
-            container.addView(btn)
+
+            for (tone in EmojiSkinTone.entries) {
+                val variant = tone.applyTo(item.unicode)
+                val btn = EmojiTextView(context).apply {
+                    text = variant
+                    textSize = 24f
+                    gravity = Gravity.CENTER
+                    val size = (38 * density).toInt()
+                    layoutParams = LayoutParams(size, size).apply {
+                        marginEnd = (4 * density).toInt()
+                    }
+                    setOnClickListener {
+                        currentSelectedVariant = variant
+                        previewTv.text = variant
+                        onEmojiClicked(variant)
+                        dialog.dismiss()
+                    }
+                }
+                tonesRow.addView(btn)
+            }
+            rootContainer.addView(tonesRow)
         }
 
-        dialog.setContentView(container)
+        // "Larp?" Action Button (Inserts authentic Apple iOS PNG sticker)
+        val larpBtn = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER
+            val padH = (16 * density).toInt()
+            val padV = (8 * density).toInt()
+            setPadding(padH, padV, padH, padV)
+            background = GradientDrawable().apply {
+                setColor(currentTheme.accentBlue)
+                cornerRadius = 12f * density
+            }
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, (38 * density).toInt())
+            isClickable = true
+            isFocusable = true
+            setOnClickListener {
+                onEmojiLarpRequested?.invoke(currentSelectedVariant)
+                dialog.dismiss()
+            }
+        }
+
+        val larpText = TextView(context).apply {
+            text = "🍎 Larp? (iOS Sticker)"
+            textSize = 14f
+            typeface = Typeface.DEFAULT_BOLD
+            setTextColor(Color.WHITE)
+        }
+        larpBtn.addView(larpText)
+        rootContainer.addView(larpBtn)
+
+        dialog.setContentView(rootContainer)
         dialog.show()
     }
 
@@ -372,13 +433,9 @@ class EmojiPickerView @JvmOverloads constructor(
             val item = items[position]
             holder.tv.text = item.unicode
             holder.tv.setOnClickListener { onItemClick(item.unicode) }
-            if (item.supportsSkinTone) {
-                holder.tv.setOnLongClickListener {
-                    onItemLongClick(item, holder.tv)
-                    true
-                }
-            } else {
-                holder.tv.setOnLongClickListener(null)
+            holder.tv.setOnLongClickListener {
+                onItemLongClick(item, holder.tv)
+                true
             }
         }
 

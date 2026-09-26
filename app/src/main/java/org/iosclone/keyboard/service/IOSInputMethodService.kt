@@ -278,14 +278,29 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 (260 * density).toInt()
             )
             onEmojiSelected = { emoji ->
-                val handledAsRichContent = org.iosclone.keyboard.emoji.EmojiStickerHelper.commitEmojiSticker(
+                // Normal tap: ALWAYS standard text emoji across all apps!
+                currentInputConnection?.commitText(emoji, 1)
+            }
+            onEmojiLarpRequested = { emoji ->
+                // Long-press "Larp?": commits authentic Apple iOS PNG sticker or copies to clipboard
+                val handled = org.iosclone.keyboard.emoji.EmojiStickerHelper.commitEmojiSticker(
                     this@IOSInputMethodService,
                     currentInputConnection,
                     currentInputEditorInfo,
                     emoji
                 )
-                if (!handledAsRichContent) {
-                    currentInputConnection?.commitText(emoji, 1)
+                if (!handled) {
+                    val copied = org.iosclone.keyboard.emoji.EmojiStickerHelper.copyStickerToClipboard(
+                        this@IOSInputMethodService,
+                        emoji
+                    )
+                    if (copied) {
+                        android.widget.Toast.makeText(
+                            this@IOSInputMethodService,
+                            "🍎 iOS Emoji sticker copied to clipboard! Paste anywhere",
+                            android.widget.Toast.LENGTH_SHORT
+                        ).show()
+                    }
                 }
             }
             onBackspaceClicked = {

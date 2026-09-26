@@ -104,13 +104,15 @@ class Trie {
 
         if (currentRow[columns - 1] <= maxCost && node.isWord) {
             results.add(Pair(currentWord.toString(), node.frequency))
+            if (results.size >= 40) return
         }
 
-        if (minRowValue <= maxCost) {
+        if (minRowValue <= maxCost && results.size < 40) {
             for ((nextCh, child) in node.children) {
                 currentWord.append(nextCh)
                 searchRecursive(child, nextCh, target, currentRow, results, maxCost, currentWord)
                 currentWord.deleteCharAt(currentWord.length - 1)
+                if (results.size >= 40) break
             }
         }
     }

@@ -454,7 +454,7 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                 )
                 IOSSettingsActionRow(
                     title = "Version",
-                    trailingText = "1.1.1 (Liquid Glass)",
+                    trailingText = "1.2.0 (Apple Intelligence)",
                     showChevron = false,
                     onClick = {}
                 )
