@@ -11,6 +11,7 @@ import android.graphics.drawable.GradientDrawable
 import android.os.Build
 import android.os.Handler
 import android.os.Looper
+import android.util.Log
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
@@ -53,6 +54,7 @@ import org.iosclone.keyboard.writingtools.WritingToolsBottomSheet
 
 class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
 
+    private val tag = "IOSInputMethodService"
     private lateinit var preferences: KeyboardPreferences
     private lateinit var themeResolver: KeyboardTheme
     private lateinit var audioHapticFeedback: AudioHapticFeedback
