@@ -5,7 +5,6 @@ import android.media.AudioAttributes
 import android.media.AudioManager
 import android.media.SoundPool
 import android.os.Build
-import android.os.VibrationAttributes
 import android.os.VibrationEffect
 import android.os.Vibrator
 import android.os.VibratorManager
@@ -181,18 +180,7 @@ class AudioHapticFeedback(private val context: Context) {
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val effect = VibrationEffect.createOneShot(durationMs, amplitude)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    try {
-                        val attrs = VibrationAttributes.Builder()
-                            .setUsage(VibrationAttributes.USAGE_KEYBOARD_CHORD)
-                            .build()
-                        vib.vibrate(effect, attrs)
-                    } catch (e: Exception) {
-                        vib.vibrate(effect)
-                    }
-                } else {
-                    vib.vibrate(effect)
-                }
+                vib.vibrate(effect)
             } else {
                 @Suppress("DEPRECATION")
                 vib.vibrate(durationMs)
@@ -229,18 +217,7 @@ class AudioHapticFeedback(private val context: Context) {
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
                 val effect = VibrationEffect.createOneShot(durationMs, amplitude)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
-                    try {
-                        val attrs = VibrationAttributes.Builder()
-                            .setUsage(VibrationAttributes.USAGE_KEYBOARD_CHORD)
-                            .build()
-                        vib.vibrate(effect, attrs)
-                    } catch (e: Exception) {
-                        vib.vibrate(effect)
-                    }
-                } else {
-                    vib.vibrate(effect)
-                }
+                vib.vibrate(effect)
             } else {
                 @Suppress("DEPRECATION")
                 vib.vibrate(durationMs)
