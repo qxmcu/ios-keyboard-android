@@ -279,6 +279,8 @@ class WritingToolsEngine {
             Regex("\\bit is important to note that\\b", RegexOption.IGNORE_CASE) to "",
             Regex("\\bI am writing this to\\b", RegexOption.IGNORE_CASE) to "",
             Regex("\\bjust wanted to ask if\\b", RegexOption.IGNORE_CASE) to "could",
+            Regex("\\bjust wondering if\\b", RegexOption.IGNORE_CASE) to "if",
+            Regex("\\bwondering if\\b", RegexOption.IGNORE_CASE) to "if",
             Regex("\\bbasically\\b\\s*", RegexOption.IGNORE_CASE) to "",
             Regex("\\bactually\\b\\s*", RegexOption.IGNORE_CASE) to "",
             Regex("\\bliterally\\b\\s*", RegexOption.IGNORE_CASE) to "",
