@@ -19,7 +19,7 @@ class GesturePathMatcher {
         layout: KeyboardLayout,
         trie: Trie?
     ): List<String> {
-        if (points.size < 2) return emptyList()
+        if (points.size < 3) return emptyList()
 
         // 1. Identify start and end character keys (with nearest-key tolerance)
         val firstPt = points.first()
