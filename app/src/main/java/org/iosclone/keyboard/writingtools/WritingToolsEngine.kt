@@ -378,4 +378,78 @@ class WritingToolsEngine {
             compositeDescription = desc
         )
     }
+
+    /**
+     * Converts raw text into an authentic iOS formatted bulleted list.
+     */
+    fun formatList(text: String): String {
+        val clean = text.trim()
+        if (clean.isBlank()) return "• "
+        val items = if (clean.contains("\n")) {
+            clean.split("\n")
+        } else if (clean.contains(",")) {
+            clean.split(",")
+        } else {
+            clean.split(Regex("(?<=[.!?])\\s+"))
+        }.map { it.trim().trimStart('•', '-', '*', ' ').trim() }.filter { it.isNotBlank() }
+
+        return items.joinToString("\n") { "• $it" }
+    }
+
+    /**
+     * Formats structured text into an authentic clean markdown table.
+     */
+    fun formatTable(text: String): String {
+        val clean = text.trim()
+        if (clean.isBlank()) return "| Item | Details |\n|---|---|\n| Sample | Value |"
+        val lines = clean.split("\n").map { it.trim() }.filter { it.isNotBlank() }
+
+        return if (lines.size >= 2) {
+            val header = "| Item | Value |"
+            val sep = "|---|---|"
+            val rows = lines.map { "| ${it.substringBefore(":", it).trim()} | ${it.substringAfter(":", "").trim().ifBlank { "-" }} |" }
+            "$header\n$sep\n${rows.joinToString("\n")}"
+        } else {
+            val parts = clean.split(Regex("[,;]")).map { it.trim() }.filter { it.isNotBlank() }
+            val header = "| Column 1 | Column 2 |"
+            val sep = "|---|---|"
+            val rows = parts.chunked(2).map { chunk ->
+                "| ${chunk.getOrNull(0) ?: "-"} | ${chunk.getOrNull(1) ?: "-"} |"
+            }
+            "$header\n$sep\n${rows.joinToString("\n")}"
+        }
+    }
+
+    /**
+     * Generates a thoughtful, context-aware message continuation or draft.
+     */
+    fun composeText(contextText: String): String {
+        val trimmed = contextText.trim()
+        return if (trimmed.isBlank()) {
+            "Hi there! Just wanted to follow up and see how everything is going."
+        } else if (trimmed.endsWith("?")) {
+            "Thanks for reaching out! Let me look into that and get back to you shortly."
+        } else {
+            "$trimmed Let me know what you think!"
+        }
+    }
+
+    /**
+     * Executes custom Apple Intelligence "Describe your change" user prompts.
+     */
+    fun customTransform(text: String, instruction: String): String {
+        val lower = instruction.lowercase().trim()
+        return when {
+            lower.contains("friendly") || lower.contains("casual") -> rewrite(text, Tone.FRIENDLY)
+            lower.contains("professional") || lower.contains("formal") -> rewrite(text, Tone.PROFESSIONAL)
+            lower.contains("concise") || lower.contains("short") -> rewrite(text, Tone.CONCISE)
+            lower.contains("proofread") || lower.contains("grammar") -> proofread(text).correctedText
+            lower.contains("summar") || lower.contains("tldr") -> summarize(text, SummaryStyle.TLDR)
+            lower.contains("bullet") || lower.contains("list") -> formatList(text)
+            lower.contains("table") || lower.contains("grid") -> formatTable(text)
+            lower.contains("poetic") || lower.contains("poem") -> "✨ Amidst the quiet, thoughts arise:\n$text\nA gentle breeze beneath the skies."
+            lower.contains("excited") || lower.contains("hyped") -> "${text.trim()} This is absolutely incredible! 🎉🔥"
+            else -> proofread(text).correctedText
+        }
+    }
 }

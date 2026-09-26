@@ -5,43 +5,34 @@ import android.graphics.Color
 import android.graphics.drawable.GradientDrawable
 import android.view.Gravity
 import android.view.View
-import android.widget.FrameLayout
+import android.view.ViewGroup
 import android.widget.LinearLayout
+import android.widget.PopupWindow
 import android.widget.TextView
 import org.iosclone.keyboard.theme.ThemeColors
 
 /**
  * Authentic iOS Callout Bubble for misspelled or autocorrected words.
- * Floats elegantly above the keyboard strip with authentic iOS blurred pill styling,
- * displaying undo options, spelling corrections, and "Never Autocorrect" learning action.
+ * Floats independently in a PopupWindow above the keyboard, completely separate
+ * from the keyboard layout hierarchy so it never shifts keys or affects sizing.
  */
-class IOSSpellingCalloutView(context: Context) : FrameLayout(context) {
+class IOSSpellingCalloutView(private val context: Context) {
 
-    private val containerLayout: LinearLayout
+    private val density = context.resources.displayMetrics.density
+    private var popupWindow: PopupWindow? = null
+    private val containerLayout: LinearLayout = LinearLayout(context).apply {
+        orientation = LinearLayout.HORIZONTAL
+        gravity = Gravity.CENTER_VERTICAL
+        val padH = (8 * density).toInt()
+        val padV = (5 * density).toInt()
+        setPadding(padH, padV, padH, padV)
+    }
+
     private var onCandidateClickListener: ((String) -> Unit)? = null
     private var onNeverAutocorrectListener: ((String) -> Unit)? = null
 
-    init {
-        visibility = View.GONE
-        val density = context.resources.displayMetrics.density
-
-        containerLayout = LinearLayout(context).apply {
-            orientation = LinearLayout.HORIZONTAL
-            gravity = Gravity.CENTER_VERTICAL
-            elevation = 12f * density
-            val padH = (8 * density).toInt()
-            val padV = (5 * density).toInt()
-            setPadding(padH, padV, padH, padV)
-        }
-
-        val lp = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
-            gravity = Gravity.CENTER_HORIZONTAL or Gravity.TOP
-            topMargin = (2 * density).toInt()
-        }
-        addView(containerLayout, lp)
-    }
-
     fun showCallout(
+        anchorView: View,
         word: String,
         candidates: List<String>,
         revertOption: String? = null,
@@ -49,10 +40,13 @@ class IOSSpellingCalloutView(context: Context) : FrameLayout(context) {
         onCandidateSelected: (String) -> Unit,
         onNeverAutocorrect: (String) -> Unit
     ) {
+        if (!anchorView.isAttachedToWindow) return
+
         this.onCandidateClickListener = onCandidateSelected
         this.onNeverAutocorrectListener = onNeverAutocorrect
 
-        val density = context.resources.displayMetrics.density
+        dismiss()
+
         containerLayout.removeAllViews()
 
         // Background styling: Authentic iOS Floating Glass Bubble
@@ -88,7 +82,7 @@ class IOSSpellingCalloutView(context: Context) : FrameLayout(context) {
             }
         }
 
-        // 3. "Never Autocorrect" action chip if word is unrecognized
+        // 3. "Learn word" action chip if word is unrecognized
         if (word.isNotBlank()) {
             containerLayout.addView(createDivider(theme, density))
             val neverTv = createItemView("Learn \"$word\"", isBold = false, isAccent = true, theme = theme, density = density) {
@@ -98,11 +92,36 @@ class IOSSpellingCalloutView(context: Context) : FrameLayout(context) {
             containerLayout.addView(neverTv)
         }
 
-        visibility = View.VISIBLE
+        try {
+            popupWindow = PopupWindow(
+                containerLayout,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+                false
+            ).apply {
+                isFocusable = false
+                isOutsideTouchable = true
+                elevation = 16f * density
+                animationStyle = android.R.style.Animation_Toast
+            }
+
+            val yOffset = anchorView.height + (8 * density).toInt()
+            popupWindow?.showAtLocation(
+                anchorView,
+                Gravity.BOTTOM or Gravity.CENTER_HORIZONTAL,
+                0,
+                yOffset
+            )
+        } catch (_: Throwable) {}
     }
 
+    fun isShowing(): Boolean = popupWindow?.isShowing == true
+
     fun dismiss() {
-        visibility = View.GONE
+        try {
+            popupWindow?.dismiss()
+        } catch (_: Throwable) {}
+        popupWindow = null
         containerLayout.removeAllViews()
     }
 

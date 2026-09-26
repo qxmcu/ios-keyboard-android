@@ -63,7 +63,9 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     private lateinit var voiceDictationEngine: VoiceDictationEngine
 
     // Views
+    private var rootFrame: FrameLayout? = null
     private var rootLayout: LinearLayout? = null
+    private var keyPopupOverlayView: org.iosclone.keyboard.view.KeyPopupOverlayView? = null
     private var suggestionStripView: SuggestionStripView? = null
     private var translationBarView: TranslationBarView? = null
     private var contentContainer: FrameLayout? = null
@@ -111,7 +113,11 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         // Voice Dictation callbacks
         voiceDictationEngine.onTextRecognized = { spokenText ->
             currentInputConnection?.commitText(spokenText + " ", 1)
+            dictationOverlayView?.setPartialText("")
             updateNextWordPredictions()
+        }
+        voiceDictationEngine.onPartialTextRecognized = { partial ->
+            dictationOverlayView?.setPartialText(partial)
         }
         voiceDictationEngine.onCommandRecognized = { command ->
             when (command) {
@@ -186,15 +192,34 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         currentTheme = themeResolver.resolveTheme(preferences.themeMode)
 
         val density = resources.displayMetrics.density
-        rootLayout = LinearLayout(this).apply {
-            orientation = LinearLayout.VERTICAL
-            isHapticFeedbackEnabled = true
-            isSoundEffectsEnabled = true
+
+        val frame = FrameLayout(this).apply {
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
         }
+        rootFrame = frame
+
+        rootLayout = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            isHapticFeedbackEnabled = true
+            isSoundEffectsEnabled = true
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT
+            )
+        }
+        frame.addView(rootLayout)
+
+        keyPopupOverlayView = org.iosclone.keyboard.view.KeyPopupOverlayView(this).apply {
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                FrameLayout.LayoutParams.MATCH_PARENT
+            )
+            setTheme(currentTheme)
+        }
+        frame.addView(keyPopupOverlayView)
 
         // 1. Suggestion Strip
         suggestionStripView = SuggestionStripView(this).apply {
@@ -208,7 +233,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 showQuickPaste(null)
             }
             onWritingToolsRequested = {
-                val anchor = rootLayout ?: this
+                val parent = rootFrame ?: rootLayout ?: this
                 val textBefore = currentInputConnection?.getTextBeforeCursor(300, 0)?.toString() ?: ""
                 val selectedText = currentInputConnection?.getSelectedText(0)?.toString() ?: ""
                 val textToProcess = if (selectedText.isNotBlank()) selectedText else textBefore.takeLast(160).trim()
@@ -226,11 +251,10 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                     }
                     wordBuffer.clear()
                     updateNextWordPredictions()
-                }.show(anchor)
+                }.show(parent)
             }
         }
         spellingCalloutView = org.iosclone.keyboard.view.IOSSpellingCalloutView(this)
-        rootLayout?.addView(spellingCalloutView)
         rootLayout?.addView(suggestionStripView)
 
         // 2. Translation Bar (collapsible)
@@ -272,6 +296,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             actionListener = this@IOSInputMethodService
             audioHapticFeedback = this@IOSInputMethodService.audioHapticFeedback
             preferences = this@IOSInputMethodService.preferences
+            popupOverlay = keyPopupOverlayView
             isHapticFeedbackEnabled = true
             isSoundEffectsEnabled = true
             layoutParams = FrameLayout.LayoutParams(
@@ -372,12 +397,14 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
 
         rootLayout?.addView(contentContainer)
 
-        ViewCompat.setOnApplyWindowInsetsListener(rootLayout!!) { _, insets ->
+        val container = rootFrame ?: rootLayout!!
+
+        ViewCompat.setOnApplyWindowInsetsListener(container) { _, insets ->
             applyBottomInsets(insets)
             insets
         }
 
-        rootLayout?.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
+        container.addOnAttachStateChangeListener(object : View.OnAttachStateChangeListener {
             override fun onViewAttachedToWindow(v: View) {
                 ViewCompat.requestApplyInsets(v)
                 ViewCompat.getRootWindowInsets(v)?.let { insets ->
@@ -397,7 +424,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         updateKeyboardLayout()
         applyCurrentTheme()
 
-        return rootLayout!!
+        return container
     }
 
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
@@ -482,7 +509,9 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             if (!isKnown || undoRecord != null) {
                 val suggestions = trie?.searchFuzzy(currentWord.lowercase(), maxCost = 2, limit = 3)?.map { it.first } ?: emptyList()
                 if (suggestions.isNotEmpty() || undoRecord != null) {
+                    val anchor = rootFrame ?: rootLayout ?: return
                     spellingCalloutView?.showCallout(
+                        anchorView = anchor,
                         word = currentWord,
                         candidates = suggestions,
                         revertOption = undoRecord?.originalTyped,
@@ -571,6 +600,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         emojiPickerView?.applyTheme(currentTheme)
         clipboardDrawerView?.applyTheme(currentTheme)
         dictationOverlayView?.applyTheme(currentTheme)
+        keyPopupOverlayView?.setTheme(currentTheme)
     }
 
     private fun updateKeyboardLayout() {
@@ -796,10 +826,15 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         if (candidates.isEmpty()) return
         val topWord = candidates.first()
         val ic = currentInputConnection ?: return
-        ic.commitText(topWord + " ", 1)
-        val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
-        val previousWords = extractPreviousWords(textBefore)
-        dictionaryEngine.onWordCommitted(topWord, previousWords.dropLast(1).lastOrNull())
+        val isSymbolOrNumeric = (currentMode == KeyboardMode.NUMERIC || currentMode == KeyboardMode.SYMBOL)
+        if (isSymbolOrNumeric) {
+            ic.commitText(topWord, 1)
+        } else {
+            ic.commitText(topWord + " ", 1)
+            val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
+            val previousWords = extractPreviousWords(textBefore)
+            dictionaryEngine.onWordCommitted(topWord, previousWords.dropLast(1).lastOrNull())
+        }
         wordBuffer.clear()
         updateNextWordPredictions()
     }

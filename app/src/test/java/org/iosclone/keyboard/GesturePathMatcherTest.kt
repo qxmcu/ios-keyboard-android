@@ -40,4 +40,12 @@ class GesturePathMatcherTest {
         val result = matcher.match(points, layout, null)
         assertTrue(result.isEmpty())
     }
+
+    @Test
+    fun testNumericModeInsufficientPoints() {
+        val matcher = GesturePathMatcher()
+        val layout = KeyboardLayoutFactory.createLayout(LanguageLayout.QWERTY, KeyboardMode.NUMERIC)
+        val result = matcher.match(listOf(GesturePoint(10f, 10f, 0L), GesturePoint(20f, 20f, 50L)), layout, null)
+        assertTrue(result.isEmpty())
+    }
 }

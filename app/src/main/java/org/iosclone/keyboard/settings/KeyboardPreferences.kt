@@ -21,6 +21,10 @@ class KeyboardPreferences(context: Context) {
         get() = prefs.getFloat("keyboard_height_factor", 1.0f)
         set(value) = prefs.edit().putFloat("keyboard_height_factor", value).apply()
 
+    var bottomSpacingDp: Int
+        get() = prefs.getInt("bottom_spacing_dp", 0)
+        set(value) = prefs.edit().putInt("bottom_spacing_dp", value).apply()
+
     var keyPopupsEnabled: Boolean
         get() = prefs.getBoolean("key_popups_enabled", true)
         set(value) = prefs.edit().putBoolean("key_popups_enabled", value).apply()

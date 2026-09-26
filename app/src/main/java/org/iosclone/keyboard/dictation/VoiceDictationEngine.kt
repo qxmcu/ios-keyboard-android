@@ -39,6 +39,7 @@ class VoiceDictationEngine(private val context: Context) {
         private set
 
     var onTextRecognized: ((String) -> Unit)? = null
+    var onPartialTextRecognized: ((String) -> Unit)? = null
     var onCommandRecognized: ((VoiceCommand) -> Unit)? = null
     var onAudioLevelChanged: ((Float) -> Unit)? = null
     var onDictationStateChanged: ((Boolean) -> Unit)? = null
@@ -113,14 +114,36 @@ class VoiceDictationEngine(private val context: Context) {
         }
     }
 
+    fun retryListening() {
+        if (!hasAudioPermission()) {
+            onPermissionNeeded?.invoke()
+            return
+        }
+        isDictationActive = true
+        try {
+            speechRecognizer?.destroy()
+            speechRecognizer = null
+        } catch (_: Exception) {}
+        startListeningInternal()
+    }
+
     private fun startListeningInternal() {
         if (!isDictationActive) return
+        val appContext = context.applicationContext
 
         try {
             if (speechRecognizer == null) {
-                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-                    setRecognitionListener(createListener())
+                speechRecognizer = if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU &&
+                    SpeechRecognizer.isOnDeviceRecognitionAvailable(appContext)) {
+                    try {
+                        SpeechRecognizer.createOnDeviceSpeechRecognizer(appContext)
+                    } catch (_: Throwable) {
+                        SpeechRecognizer.createSpeechRecognizer(appContext)
+                    }
+                } else {
+                    SpeechRecognizer.createSpeechRecognizer(appContext)
                 }
+                speechRecognizer?.setRecognitionListener(createListener())
             }
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
@@ -128,7 +151,6 @@ class VoiceDictationEngine(private val context: Context) {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE, currentLangCode)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
 
             speechRecognizer?.startListening(intent)
@@ -186,6 +208,15 @@ class VoiceDictationEngine(private val context: Context) {
             isListening = false
             onStatusChanged?.invoke("🎙 Processing…")
             // Do NOT close dictation mode on pause! Keep UI alive and waiting for results
+        }
+
+        override fun onPartialResults(partialResults: Bundle?) {
+            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+            val partial = matches?.firstOrNull()
+            if (!partial.isNullOrBlank()) {
+                onPartialTextRecognized?.invoke(partial)
+                onStatusChanged?.invoke(partial)
+            }
         }
 
         override fun onError(error: Int) {
@@ -252,13 +283,6 @@ class VoiceDictationEngine(private val context: Context) {
             }
         }
 
-        override fun onPartialResults(partialResults: Bundle?) {
-            val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            val text = matches?.firstOrNull()
-            if (!text.isNullOrBlank()) {
-                onStatusChanged?.invoke("🎙 $text")
-            }
-        }
 
         override fun onEvent(eventType: Int, params: Bundle?) {}
     }

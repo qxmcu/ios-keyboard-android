@@ -19,7 +19,10 @@ class GesturePathMatcher {
         layout: KeyboardLayout,
         trie: Trie?
     ): List<String> {
-        if (points.size < 3 || trie == null) return emptyList()
+        if (points.size < 3) return emptyList()
+
+        val isSymbolOrNumeric = (layout.mode == org.iosclone.keyboard.layout.KeyboardMode.NUMERIC ||
+                layout.mode == org.iosclone.keyboard.layout.KeyboardMode.SYMBOL)
 
         // 1. Identify start and end character keys (with nearest-key tolerance)
         val firstPt = points.first()
@@ -28,8 +31,8 @@ class GesturePathMatcher {
         val startKey = findNearestCharacterKey(firstPt.x, firstPt.y, layout) ?: return emptyList()
         val endKey = findNearestCharacterKey(lastPt.x, lastPt.y, layout) ?: return emptyList()
 
-        val startChar = startKey.label.lowercase().firstOrNull() ?: return emptyList()
-        val endChar = endKey.label.lowercase().firstOrNull() ?: return emptyList()
+        val startChar = startKey.label.firstOrNull() ?: return emptyList()
+        val endChar = endKey.label.firstOrNull() ?: return emptyList()
 
         // 2. Extract ordered sequence of keys traversed along the path
         val traversedChars = mutableListOf<Char>()
@@ -38,7 +41,7 @@ class GesturePathMatcher {
         for (pt in points) {
             val key = findNearestCharacterKey(pt.x, pt.y, layout, maxDistDp = 48f)
             if (key != null) {
-                val ch = key.label.lowercase().firstOrNull()
+                val ch = key.label.firstOrNull()
                 if (ch != null && ch != lastChar) {
                     traversedChars.add(ch)
                     lastChar = ch
@@ -51,9 +54,22 @@ class GesturePathMatcher {
             if (endChar != startChar) traversedChars.add(endChar)
         }
 
+        // For Numeric (1234...) and Symbol (€>€€...) keyboards:
+        // Construct candidates directly from the traversed sequence
+        if (isSymbolOrNumeric) {
+            val sequence = traversedChars.joinToString("")
+            return if (sequence.isNotEmpty()) listOf(sequence) else emptyList()
+        }
+
+        if (trie == null) return emptyList()
+
+        val lowerStartChar = startChar.lowercaseChar()
+        val lowerEndChar = endChar.lowercaseChar()
+        val traversedLowerChars = traversedChars.map { it.lowercaseChar() }
+
         // 3. Query dictionary trie for words starting with startChar (and nearby neighbors)
         val candidateWords = mutableMapOf<String, Int>()
-        val startCandidates = trie.findPrefixSuggestions(startChar.toString(), limit = 120)
+        val startCandidates = trie.findPrefixSuggestions(lowerStartChar.toString(), limit = 120)
         for ((word, freq) in startCandidates) {
             candidateWords[word] = freq
         }
@@ -67,15 +83,15 @@ class GesturePathMatcher {
             if (lower.length < 2) continue
 
             // Bonus for matching expected end character
-            val endMatches = (lower.last() == endChar)
+            val endMatches = (lower.last() == lowerEndChar)
             val endBonus = if (endMatches) 70f else -30f
 
             // Check subsequence alignment
             var pIdx = 0
             var matchedCount = 0
             for (ch in lower) {
-                while (pIdx < traversedChars.size) {
-                    if (traversedChars[pIdx] == ch) {
+                while (pIdx < traversedLowerChars.size) {
+                    if (traversedLowerChars[pIdx] == ch) {
                         matchedCount++
                         pIdx++
                         break
@@ -87,7 +103,7 @@ class GesturePathMatcher {
             val matchRatio = matchedCount.toFloat() / lower.length.toFloat()
             if (matchRatio < 0.65f) continue
 
-            val lengthDiff = abs(traversedChars.size - lower.length)
+            val lengthDiff = abs(traversedLowerChars.size - lower.length)
             val score = (freq * 0.45f) + (matchRatio * 100f) + endBonus - (lengthDiff * 4f)
             scoredList.add(ScoredWord(word, score))
         }
@@ -108,7 +124,7 @@ class GesturePathMatcher {
 
         for (row in layout.rows) {
             for (key in row) {
-                if (key.keyType != KeyType.CHARACTER || key.label.length != 1 || !key.label[0].isLetter()) {
+                if (key.keyType != KeyType.CHARACTER || key.label.length != 1) {
                     continue
                 }
                 // Check if point is inside key touch bounds

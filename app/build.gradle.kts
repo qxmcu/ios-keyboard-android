@@ -12,8 +12,8 @@ android {
         applicationId = "org.iosclone.keyboard"
         minSdk = 26
         targetSdk = 35
-        versionCode = 8
-        versionName = "1.2.5"
+        versionCode = 9
+        versionName = "1.2.7"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {

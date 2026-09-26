@@ -199,11 +199,26 @@ class SuggestionStripView @JvmOverloads constructor(
         isAutocorrectActive = result.isAutocorrectCandidate ||
             (!result.isExactMatch && center.isNotEmpty() && !center.equals(result.rawTypedWord, ignoreCase = true))
 
-        centerCandidateTv.text = if (isAutocorrectActive) "\"$center\"" else center
-        leftCandidateTv.text = result.leftCandidate
+        val newCenter = if (isAutocorrectActive) "\"$center\"" else center
+        if (centerCandidateTv.text != newCenter) {
+            centerCandidateTv.text = newCenter
+            centerCandidateTv.alpha = 0.6f
+            centerCandidateTv.animate().alpha(1.0f).setDuration(100).start()
+        }
+
+        if (leftCandidateTv.text != result.leftCandidate) {
+            leftCandidateTv.text = result.leftCandidate
+            leftCandidateTv.alpha = 0.6f
+            leftCandidateTv.animate().alpha(1.0f).setDuration(100).start()
+        }
 
         val rightText = result.suggestedEmoji ?: result.rightCandidate
-        rightCandidateTv.text = rightText
+        if (rightCandidateTv.text != rightText) {
+            rightCandidateTv.text = rightText
+            rightCandidateTv.alpha = 0.6f
+            rightCandidateTv.animate().alpha(1.0f).setDuration(100).start()
+        }
+
         if (result.suggestedEmoji != null) {
             rightCandidateTv.textSize = 20f
             val tf = org.iosclone.keyboard.emoji.EmojiTextView.getBundledTypeface(context)

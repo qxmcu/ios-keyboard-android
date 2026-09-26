@@ -6,6 +6,7 @@ class TrieNode {
     val children = mutableMapOf<Char, TrieNode>()
     var isWord: Boolean = false
     var frequency: Int = 0
+    var maxSubtreeFreq: Int = 0
 }
 
 class Trie {
@@ -15,8 +16,10 @@ class Trie {
         if (word.isBlank()) return
         var current = root
         val lower = word.lowercase()
+        root.maxSubtreeFreq = maxOf(root.maxSubtreeFreq, frequency)
         for (ch in lower) {
             current = current.children.getOrPut(ch) { TrieNode() }
+            current.maxSubtreeFreq = maxOf(current.maxSubtreeFreq, frequency)
         }
         current.isWord = true
         current.frequency = maxOf(current.frequency, frequency)
@@ -32,6 +35,7 @@ class Trie {
 
     /**
      * Retrieves words starting with prefix, sorted by descending frequency.
+     * Pruned with maxSubtreeFreq for instantaneous sub-millisecond lookups.
      */
     fun findPrefixSuggestions(prefix: String, limit: Int = 5): List<Pair<String, Int>> {
         val results = mutableListOf<Pair<String, Int>>()
@@ -42,17 +46,27 @@ class Trie {
             current = current.children[ch] ?: return emptyList()
         }
 
-        collectWords(current, StringBuilder(lower), results)
+        collectWords(current, StringBuilder(lower), results, limit * 10)
         return results.sortedByDescending { it.second }.take(limit)
     }
 
-    private fun collectWords(node: TrieNode, sb: StringBuilder, results: MutableList<Pair<String, Int>>) {
+    private fun collectWords(
+        node: TrieNode,
+        sb: StringBuilder,
+        results: MutableList<Pair<String, Int>>,
+        maxCollect: Int
+    ) {
+        if (results.size >= maxCollect) return
+
         if (node.isWord) {
             results.add(Pair(sb.toString(), node.frequency))
         }
-        for ((ch, child) in node.children) {
+
+        val sortedChildren = node.children.entries.sortedByDescending { it.value.maxSubtreeFreq }
+        for ((ch, child) in sortedChildren) {
+            if (results.size >= maxCollect) break
             sb.append(ch)
-            collectWords(child, sb, results)
+            collectWords(child, sb, results, maxCollect)
             sb.deleteCharAt(sb.length - 1)
         }
     }

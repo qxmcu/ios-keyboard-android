@@ -72,9 +72,10 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
     var activeLanguage by remember { mutableStateOf(prefs.activeLanguage) }
     var showNumberRow by remember { mutableStateOf(prefs.showNumberRow) }
     var showPeriodKey by remember { mutableStateOf(prefs.showPeriodKey) }
+    var bottomSpacing by remember { mutableIntStateOf(prefs.bottomSpacingDp) }
 
     var isCheckingUpdate by remember { mutableStateOf(false) }
-    var updateSubtitle by remember { mutableStateOf("v1.2.5 (Current)") }
+    var updateSubtitle by remember { mutableStateOf("v1.2.7 (Current)") }
     var updateProgress by remember { mutableIntStateOf(-1) }
 
     var clipboardHistory by remember { mutableStateOf(prefs.clipboardHistoryEnabled) }
@@ -162,13 +163,23 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                 IOSSettingsSliderRow(
                     title = "Keyboard Height Scale",
                     value = keyHeight * 100f,
-                    valueRange = 80f..130f,
+                    valueRange = 70f..140f,
                     onValueChange = {
                         val factor = it / 100f
                         keyHeight = factor
                         prefs.keyboardHeightFactor = factor
                     },
                     valueDisplay = "${(keyHeight * 100).toInt()}%"
+                )
+                IOSSettingsSliderRow(
+                    title = "Bottom Spacing / Offset",
+                    value = bottomSpacing.toFloat(),
+                    valueRange = 0f..32f,
+                    onValueChange = {
+                        bottomSpacing = it.toInt()
+                        prefs.bottomSpacingDp = it.toInt()
+                    },
+                    valueDisplay = "${bottomSpacing}dp"
                 )
                 IOSSettingsToggleRow(
                     title = "Key Popups",
@@ -510,7 +521,7 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                         isCheckingUpdate = true
                         updateSubtitle = "Checking for releases…"
                         AppUpdateChecker.check(
-                            currentVersion = "1.2.5",
+                            currentVersion = "1.2.7",
                             onResult = { info ->
                                 isCheckingUpdate = false
                                 if (info.hasUpdate && info.apkDownloadUrl != null) {
@@ -535,8 +546,8 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                                         .setNegativeButton("Later", null)
                                         .show()
                                 } else {
-                                    updateSubtitle = "iOS Keyboard is up to date (v1.2.5)"
-                                    Toast.makeText(context, "iOS Keyboard is up to date (v1.2.5)", Toast.LENGTH_SHORT).show()
+                                    updateSubtitle = "iOS Keyboard is up to date (v1.2.7)"
+                                    Toast.makeText(context, "iOS Keyboard is up to date (v1.2.7)", Toast.LENGTH_SHORT).show()
                                 }
                             },
                             onError = { err ->
@@ -566,7 +577,7 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                 )
                 IOSSettingsActionRow(
                     title = "Version",
-                    trailingText = "1.2.5 (Apple Intelligence)",
+                    trailingText = "1.2.7 (Apple Intelligence)",
                     showChevron = false,
                     onClick = {}
                 )

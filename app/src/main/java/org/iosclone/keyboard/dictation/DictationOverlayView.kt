@@ -24,18 +24,25 @@ class DictationOverlayView @JvmOverloads constructor(
     private val statusTv: TextView
     private val waveView: AudioWaveformView
     private val doneBtn: TextView
+    private val previewTv: TextView
     private var currentTheme: ThemeColors = ThemeColors.Light
 
     var onDoneClicked: (() -> Unit)? = null
     var onRetryClicked: (() -> Unit)? = null
 
     init {
-        orientation = HORIZONTAL
-        gravity = Gravity.CENTER_VERTICAL
+        orientation = VERTICAL
+        gravity = Gravity.CENTER_HORIZONTAL
         val density = resources.displayMetrics.density
         val padH = (16 * density).toInt()
-        val padV = (8 * density).toInt()
+        val padV = (10 * density).toInt()
         setPadding(padH, padV, padH, padV)
+
+        val topRow = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+        }
 
         statusTv = TextView(context).apply {
             text = "🎙 Listening…"
@@ -46,16 +53,16 @@ class DictationOverlayView @JvmOverloads constructor(
             }
             setOnClickListener { onRetryClicked?.invoke() }
         }
-        addView(statusTv)
+        topRow.addView(statusTv)
 
         waveView = AudioWaveformView(context).apply {
             layoutParams = LayoutParams(0, (28 * density).toInt(), 1.0f)
         }
-        addView(waveView)
+        topRow.addView(waveView)
 
         doneBtn = TextView(context).apply {
             text = "Done"
-            textSize = 15.5f
+            textSize = 15f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             val btnPadH = (14 * density).toInt()
             val btnPadV = (6 * density).toInt()
@@ -65,11 +72,32 @@ class DictationOverlayView @JvmOverloads constructor(
             }
             setOnClickListener { onDoneClicked?.invoke() }
         }
-        addView(doneBtn)
+        topRow.addView(doneBtn)
+        addView(topRow)
+
+        previewTv = TextView(context).apply {
+            textSize = 14.5f
+            maxLines = 3
+            ellipsize = android.text.TextUtils.TruncateAt.END
+            visibility = GONE
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
+                topMargin = (8 * density).toInt()
+            }
+        }
+        addView(previewTv)
     }
 
     fun setStatus(text: String) {
         statusTv.text = text
+    }
+
+    fun setPartialText(text: String) {
+        if (text.isNotBlank()) {
+            previewTv.text = text
+            previewTv.visibility = VISIBLE
+        } else {
+            previewTv.visibility = GONE
+        }
     }
 
     fun setAudioLevel(rmsDb: Float) {
@@ -85,6 +113,7 @@ class DictationOverlayView @JvmOverloads constructor(
             setStroke((1 * density).toInt().coerceAtLeast(1), theme.keyboardGlassStroke)
         }
         statusTv.setTextColor(theme.textPrimary)
+        previewTv.setTextColor(theme.textPrimary)
         waveView.setWaveColor(theme.accentBlue)
         doneBtn.setTextColor(Color.WHITE)
         doneBtn.background = GradientDrawable().apply {
