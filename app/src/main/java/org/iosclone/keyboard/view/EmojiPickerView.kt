@@ -22,11 +22,13 @@ import android.widget.TextView
 import androidx.core.content.ContextCompat
 import androidx.recyclerview.widget.GridLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import org.iosclone.keyboard.emoji.DeviceDetector
 import org.iosclone.keyboard.emoji.EmojiCategory
 import org.iosclone.keyboard.emoji.EmojiData
 import org.iosclone.keyboard.emoji.EmojiItem
 import org.iosclone.keyboard.emoji.EmojiSkinTone
 import org.iosclone.keyboard.emoji.EmojiTextView
+import org.iosclone.keyboard.emoji.ZFontAutomator
 import org.iosclone.keyboard.theme.ThemeColors
 
 class EmojiPickerView @JvmOverloads constructor(
@@ -110,6 +112,43 @@ class EmojiPickerView @JvmOverloads constructor(
         searchPill.addView(searchEditText)
         searchContainer.addView(searchPill)
         addView(searchContainer)
+
+        // 1b. Smart 1-Tap iOS Emoji Setup Banner for Non-Nothing Devices (Samsung, Xiaomi, Oppo, etc.)
+        val isNothing = DeviceDetector.isNothingPhone()
+        if (!isNothing) {
+            val shortBrand = DeviceDetector.getShortBrandName()
+            val bannerLayout = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER
+                val padH = (12 * density).toInt()
+                val padV = (5 * density).toInt()
+                setPadding(padH, padV, padH, padV)
+                val mH = (12 * density).toInt()
+                val mB = (4 * density).toInt()
+                layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, (30 * density).toInt()).apply {
+                    setMargins(mH, 0, mH, mB)
+                }
+                background = GradientDrawable().apply {
+                    setColor(0x1F007AFF)
+                    cornerRadius = 15f * density
+                    setStroke((1 * density).toInt(), 0x33007AFF)
+                }
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    ZFontAutomator.autoApplyIOSFont(context, windowToken)
+                }
+            }
+
+            val bannerTv = TextView(context).apply {
+                text = "✨ 1-Tap Apply iOS 26.4 Emojis ($shortBrand)"
+                textSize = 12f
+                setTextColor(Color.parseColor("#007AFF"))
+                typeface = Typeface.DEFAULT_BOLD
+            }
+            bannerLayout.addView(bannerTv)
+            addView(bannerLayout)
+        }
 
         // 2. Ultra-Smooth RecyclerView Emoji Grid (7 columns matching iOS 27)
         recyclerView = RecyclerView(context).apply {
@@ -345,37 +384,96 @@ class EmojiPickerView @JvmOverloads constructor(
             rootContainer.addView(tonesRow)
         }
 
-        // "Larp?" Action Button (Inserts authentic Apple iOS PNG sticker)
-        val larpBtn = LinearLayout(context).apply {
-            orientation = HORIZONTAL
-            gravity = Gravity.CENTER
-            val padH = (16 * density).toInt()
-            val padV = (8 * density).toInt()
-            setPadding(padH, padV, padH, padV)
-            background = GradientDrawable().apply {
-                setColor(currentTheme.accentBlue)
-                cornerRadius = 12f * density
+        try {
+            val token = anchor.windowToken ?: windowToken
+            if (token != null) {
+                dialog.window?.attributes?.token = token
+                dialog.window?.setType(android.view.WindowManager.LayoutParams.TYPE_APPLICATION_ATTACHED_DIALOG)
             }
-            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, (38 * density).toInt())
-            isClickable = true
-            isFocusable = true
-            setOnClickListener {
-                onEmojiLarpRequested?.invoke(currentSelectedVariant)
-                dialog.dismiss()
-            }
-        }
+        } catch (_: Throwable) {}
 
-        val larpText = TextView(context).apply {
-            text = "🍎 Larp? (iOS Sticker)"
-            textSize = 14f
-            typeface = Typeface.DEFAULT_BOLD
-            setTextColor(Color.WHITE)
+        val isNothing = DeviceDetector.isNothingPhone()
+        val shortBrand = DeviceDetector.getShortBrandName()
+
+        if (isNothing) {
+            // Nothing Phone: "Larp?" Action Button (Inserts authentic Apple iOS PNG sticker)
+            val larpBtn = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER
+                val padH = (16 * density).toInt()
+                val padV = (8 * density).toInt()
+                setPadding(padH, padV, padH, padV)
+                background = GradientDrawable().apply {
+                    setColor(currentTheme.accentBlue)
+                    cornerRadius = 12f * density
+                }
+                layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, (38 * density).toInt())
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    onEmojiLarpRequested?.invoke(currentSelectedVariant)
+                    dialog.dismiss()
+                }
+            }
+
+            val larpText = TextView(context).apply {
+                text = "🍎 Larp? (iOS Sticker)"
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.WHITE)
+            }
+            larpBtn.addView(larpText)
+            rootContainer.addView(larpBtn)
+        } else {
+            // Non-Nothing device: 1-Tap zFont 3 Auto-Apply button + Insert Sticker option
+            val applyBtn = LinearLayout(context).apply {
+                orientation = HORIZONTAL
+                gravity = Gravity.CENTER
+                val padH = (16 * density).toInt()
+                val padV = (8 * density).toInt()
+                setPadding(padH, padV, padH, padV)
+                background = GradientDrawable().apply {
+                    setColor(currentTheme.accentBlue)
+                    cornerRadius = 12f * density
+                }
+                layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, (38 * density).toInt()).apply {
+                    bottomMargin = (8 * density).toInt()
+                }
+                isClickable = true
+                isFocusable = true
+                setOnClickListener {
+                    dialog.dismiss()
+                    ZFontAutomator.autoApplyIOSFont(context, anchor.windowToken ?: windowToken)
+                }
+            }
+
+            val applyText = TextView(context).apply {
+                text = "🚀 Auto-Apply iOS Emojis ($shortBrand)"
+                textSize = 14f
+                typeface = Typeface.DEFAULT_BOLD
+                setTextColor(Color.WHITE)
+            }
+            applyBtn.addView(applyText)
+            rootContainer.addView(applyBtn)
+
+            val stickerBtn = TextView(context).apply {
+                text = "🍎 Insert as iOS Sticker"
+                textSize = 13f
+                setTextColor(currentTheme.accentBlue)
+                val pad = (6 * density).toInt()
+                setPadding(pad, pad, pad, pad)
+                setOnClickListener {
+                    onEmojiLarpRequested?.invoke(currentSelectedVariant)
+                    dialog.dismiss()
+                }
+            }
+            rootContainer.addView(stickerBtn)
         }
-        larpBtn.addView(larpText)
-        rootContainer.addView(larpBtn)
 
         dialog.setContentView(rootContainer)
-        dialog.show()
+        try {
+            dialog.show()
+        } catch (_: Exception) {}
     }
 
     fun applyTheme(theme: ThemeColors) {
@@ -432,10 +530,61 @@ class EmojiPickerView @JvmOverloads constructor(
         override fun onBindViewHolder(holder: ViewHolder, position: Int) {
             val item = items[position]
             holder.tv.text = item.unicode
-            holder.tv.setOnClickListener { onItemClick(item.unicode) }
-            holder.tv.setOnLongClickListener {
-                onItemLongClick(item, holder.tv)
-                true
+
+            val isNothing = DeviceDetector.isNothingPhone()
+            if (isNothing) {
+                // On Nothing Phone: tap types standard unicode; holding for 2.5-3 seconds pops up "Larp?" bubble
+                val holdThresholdMs = 2500L
+                var downTime = 0L
+                var downX = 0f
+                var downY = 0f
+                var longPressTriggered = false
+                val handler = holder.tv.handler ?: android.os.Handler(android.os.Looper.getMainLooper())
+                val longPressRunnable = Runnable {
+                    longPressTriggered = true
+                    holder.tv.performHapticFeedback(android.view.HapticFeedbackConstants.LONG_PRESS)
+                    onItemLongClick(item, holder.tv)
+                }
+
+                holder.tv.setOnTouchListener { v, event ->
+                    when (event.actionMasked) {
+                        android.view.MotionEvent.ACTION_DOWN -> {
+                            downTime = System.currentTimeMillis()
+                            downX = event.rawX
+                            downY = event.rawY
+                            longPressTriggered = false
+                            handler.postDelayed(longPressRunnable, holdThresholdMs)
+                            false
+                        }
+                        android.view.MotionEvent.ACTION_MOVE -> {
+                            val dx = Math.abs(event.rawX - downX)
+                            val dy = Math.abs(event.rawY - downY)
+                            val touchSlop = 16f * holder.tv.resources.displayMetrics.density
+                            if (dx > touchSlop || dy > touchSlop) {
+                                handler.removeCallbacks(longPressRunnable)
+                            }
+                            false
+                        }
+                        android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> {
+                            handler.removeCallbacks(longPressRunnable)
+                            false
+                        }
+                        else -> false
+                    }
+                }
+                holder.tv.setOnClickListener {
+                    if (!longPressTriggered) {
+                        onItemClick(item.unicode)
+                    }
+                }
+                holder.tv.setOnLongClickListener(null)
+            } else {
+                holder.tv.setOnTouchListener(null)
+                holder.tv.setOnClickListener { onItemClick(item.unicode) }
+                holder.tv.setOnLongClickListener {
+                    onItemLongClick(item, holder.tv)
+                    true
+                }
             }
         }
 

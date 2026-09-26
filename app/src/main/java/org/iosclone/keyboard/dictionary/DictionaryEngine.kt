@@ -129,12 +129,12 @@ class DictionaryEngine(private val context: Context) {
             )
         }
 
-        // 3. Check Contractions & Common Phonetic Misspellings ("dont" -> "don't", "teh" -> "the")
-        val contractionFix = ContractionFixer.getFix(rawInput)
-        if (contractionFix != null && autocorrectEnabled && !undoManager.isIgnored(rawInput)) {
-            val emoji = PredictiveEmojiEngine.getSuggestedEmojis(contractionFix)?.firstOrNull()
+        // 3. Check TypoCorrectionCorpus & Contractions ("dont" -> "don't", "teh" -> "the", "recieve" -> "receive")
+        val typoFix = TypoCorrectionCorpus.findCorrection(rawInput) ?: ContractionFixer.getFix(rawInput)
+        if (typoFix != null && autocorrectEnabled && !undoManager.isIgnored(rawInput)) {
+            val emoji = PredictiveEmojiEngine.getSuggestedEmojis(typoFix)?.firstOrNull()
             return AutocorrectResult(
-                centerCandidate = contractionFix,
+                centerCandidate = typoFix,
                 leftCandidate = rawInput,
                 rightCandidate = emoji ?: "",
                 isExactMatch = false,

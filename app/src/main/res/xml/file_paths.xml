@@ -1,5 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
     <cache-path name="emoji_stickers" path="emoji_stickers/" />
+    <cache-path name="fonts" path="fonts/" />
+    <external-files-path name="fonts" path="fonts/" />
     <external-files-path name="export" path="exports/" />
+    <external-files-path name="all_external" path="." />
 </paths>

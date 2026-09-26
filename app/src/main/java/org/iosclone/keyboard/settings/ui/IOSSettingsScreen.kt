@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import org.iosclone.keyboard.clipboard.ClipboardDatabase
+import org.iosclone.keyboard.emoji.DeviceDetector
+import org.iosclone.keyboard.emoji.ZFontAutomator
 import org.iosclone.keyboard.layout.LanguageLayout
 import org.iosclone.keyboard.settings.KeyboardPreferences
 import org.iosclone.keyboard.theme.ThemeMode
@@ -399,43 +401,71 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                 )
             }
 
-            // Section 8: iOS 26.4 Emojis (Nothing Phone & System)
-            IOSSectionHeader(title = "iOS 26.4 Emojis (Nothing Phone & System)")
+            // Section 8: iOS 26.4 Emojis (Device Adaptive)
+            val isNothing = DeviceDetector.isNothingPhone()
+            val brandDisplay = DeviceDetector.getBrandDisplayName()
+            val shortBrand = DeviceDetector.getShortBrandName()
+
+            IOSSectionHeader(
+                title = if (isNothing) "iOS 26.4 Emojis (Nothing Phone)" else "iOS 26.4 Emojis ($shortBrand)"
+            )
             IOSGroupedCard {
+                if (!isNothing) {
+                    val isZFontInstalled = ZFontAutomator.isZFontInstalled(context)
+                    IOSSettingsActionRow(
+                        title = "🚀 Auto-Apply iOS Emojis on $shortBrand",
+                        subtitle = if (isZFontInstalled) "Open AppleColorEmoji in zFont 3 1-tap installer" else "Install zFont 3 & auto-apply font in 1 tap",
+                        onClick = {
+                            ZFontAutomator.autoApplyIOSFont(context)
+                        }
+                    )
+                    IOSSettingsActionRow(
+                        title = "How 1-Tap iOS Emoji Apply Works on $shortBrand",
+                        subtitle = "Rootless system guide for $brandDisplay",
+                        onClick = {
+                            ZFontAutomator.showOEMInstructionsDialog(context)
+                        }
+                    )
+                }
+
                 IOSSettingsActionRow(
                     title = "Export iOS 26.4 Emoji Font",
-                    subtitle = "Extracts authentic AppleColorEmoji.ttf directly to Downloads",
+                    subtitle = "Saves AppleColorEmoji.ttf directly to Downloads",
                     onClick = {
                         val path = org.iosclone.keyboard.emoji.EmojiStickerHelper.exportEmojiFontToDownloads(context)
                         if (path != null) {
                             AlertDialog.Builder(context)
                                 .setTitle("Font Exported Successfully")
-                                .setMessage("AppleColorEmoji.ttf was saved to:\n\n$path\n\nYou can now apply it using zFont 3 with Shizuku (no root needed on Nothing Phone) or Magisk.")
+                                .setMessage("AppleColorEmoji.ttf was saved to:\n\n$path\n\n${if (isNothing) "You can now apply it using zFont 3 with Shizuku (no root needed on Nothing OS) or Magisk." else "You can now apply it via zFont 3 in 1 tap."}")
                                 .setPositiveButton("OK", null)
                                 .show()
                         } else {
                             Toast.makeText(context, "Failed to export font", Toast.LENGTH_SHORT).show()
                         }
-                    }
-                )
-                IOSSettingsActionRow(
-                    title = "How to Apply iOS Emojis on Nothing Phone",
-                    subtitle = "3-step rootless guide for Nothing OS & all apps",
-                    onClick = {
-                        AlertDialog.Builder(context)
-                            .setTitle("Nothing Phone iOS Emoji Guide (No Root)")
-                            .setMessage(
-                                "To get authentic iOS emojis inside Notes, Instagram, and all apps system-wide:\n\n" +
-                                "1. Tap 'Export iOS 26.4 Emoji Font' above.\n\n" +
-                                "2. Install zFont 3 and Shizuku from Google Play.\n\n" +
-                                "3. In zFont 3, tap 'Load Custom Font', pick 'iOS_26.4_AppleColorEmoji.ttf' from your Downloads folder, and tap 'Apply (Shizuku)'.\n\n" +
-                                "All apps across Nothing OS (Notes, Instagram, WhatsApp) will now render Apple iOS emojis natively!"
-                            )
-                            .setPositiveButton("Got It", null)
-                            .show()
                     },
-                    showDivider = false
+                    showDivider = isNothing
                 )
+
+                if (isNothing) {
+                    IOSSettingsActionRow(
+                        title = "How to Apply iOS Emojis on Nothing Phone",
+                        subtitle = "3-step rootless guide for Nothing OS & all apps",
+                        onClick = {
+                            AlertDialog.Builder(context)
+                                .setTitle("Nothing Phone iOS Emoji Guide (No Root)")
+                                .setMessage(
+                                    "To get authentic iOS emojis inside Notes, Instagram, and all apps system-wide:\n\n" +
+                                    "1. Tap 'Export iOS 26.4 Emoji Font' above.\n\n" +
+                                    "2. Install zFont 3 and Shizuku from Google Play.\n\n" +
+                                    "3. In zFont 3, tap 'Load Custom Font', pick 'iOS_26.4_AppleColorEmoji.ttf' from your Downloads folder, and tap 'Apply (Shizuku)'.\n\n" +
+                                    "All apps across Nothing OS (Notes, Instagram, WhatsApp) will now render Apple iOS emojis natively!"
+                                )
+                                .setPositiveButton("Got It", null)
+                                .show()
+                        },
+                        showDivider = false
+                    )
+                }
             }
 
             // Section 9: About & Privacy
@@ -454,7 +484,7 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                 )
                 IOSSettingsActionRow(
                     title = "Version",
-                    trailingText = "1.2.0 (Apple Intelligence)",
+                    trailingText = "1.2.1 (Apple Intelligence)",
                     showChevron = false,
                     onClick = {}
                 )

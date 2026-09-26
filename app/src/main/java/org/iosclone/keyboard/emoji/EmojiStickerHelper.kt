@@ -169,9 +169,6 @@ object EmojiStickerHelper {
      * Detects if device is a Nothing Phone (Nothing OS).
      */
     fun isNothingPhone(): Boolean {
-        val m = Build.MANUFACTURER.lowercase()
-        val b = Build.BRAND.lowercase()
-        val model = Build.MODEL.lowercase()
-        return m.contains("nothing") || b.contains("nothing") || model.contains("nothing") || model.contains("a063") || model.contains("a065") || model.contains("ain065")
+        return DeviceDetector.isNothingPhone()
     }
 }
