@@ -2,14 +2,20 @@ package org.iosclone.keyboard.settings
 
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
+import android.os.Build
+import android.provider.Settings
+import android.util.Log
 import androidx.core.content.FileProvider
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
+import java.io.IOException
 import java.net.HttpURLConnection
 import java.net.URL
 
@@ -35,8 +41,8 @@ object AppUpdateChecker {
                 val url = URL(GITHUB_LATEST_RELEASE_URL)
                 val conn = (url.openConnection() as HttpURLConnection).apply {
                     requestMethod = "GET"
-                    connectTimeout = 10000
-                    readTimeout = 10000
+                    connectTimeout = 15000
+                    readTimeout = 15000
                     setRequestProperty("Accept", "application/vnd.github.v3+json")
                     setRequestProperty("User-Agent", "iOS-Keyboard-Android")
                 }
@@ -87,6 +93,42 @@ object AppUpdateChecker {
         }
     }
 
+    private fun openConnectionWithRedirects(initialUrl: String, rangeBytes: Long = 0L): Pair<HttpURLConnection, Long> {
+        var currentUrl = initialUrl
+        var redirects = 0
+        while (redirects < 6) {
+            val conn = (URL(currentUrl).openConnection() as HttpURLConnection).apply {
+                instanceFollowRedirects = false
+                connectTimeout = 30000
+                readTimeout = 60000
+                setRequestProperty("User-Agent", "iOS-Keyboard-Android")
+                setRequestProperty("Accept-Encoding", "identity")
+                if (rangeBytes > 0L) {
+                    setRequestProperty("Range", "bytes=$rangeBytes-")
+                }
+            }
+            val code = conn.responseCode
+            if (code == HttpURLConnection.HTTP_MOVED_PERM ||
+                code == HttpURLConnection.HTTP_MOVED_TEMP ||
+                code == 307 || code == 308) {
+                val loc = conn.getHeaderField("Location") ?: throw IOException("HTTP redirect without Location header")
+                conn.disconnect()
+                currentUrl = loc
+                redirects++
+                continue
+            }
+            val totalLength = if (code == HttpURLConnection.HTTP_PARTIAL) {
+                val contentRange = conn.getHeaderField("Content-Range")
+                val totalFromRange = contentRange?.substringAfterLast('/')?.toLongOrNull()
+                totalFromRange ?: (rangeBytes + conn.contentLengthLong)
+            } else {
+                conn.contentLengthLong
+            }
+            return Pair(conn, totalLength)
+        }
+        throw IOException("Too many redirects: $redirects")
+    }
+
     fun downloadAndInstall(
         context: Context,
         downloadUrl: String,
@@ -97,54 +139,76 @@ object AppUpdateChecker {
             try {
                 val updateDir = File(context.getExternalFilesDir(null), "updates").apply { mkdirs() }
                 val targetFile = File(updateDir, "iOSKeyboard-update.apk")
-                if (targetFile.exists()) targetFile.delete()
 
-                val url = URL(downloadUrl)
-                val conn = (url.openConnection() as HttpURLConnection).apply {
-                    instanceFollowRedirects = true
-                    connectTimeout = 15000
-                    readTimeout = 30000
-                    setRequestProperty("User-Agent", "iOS-Keyboard-Android")
-                }
+                var totalExpectedLength = -1L
+                var lastReportedProgress = -1
+                var attempts = 0
+                val maxAttempts = 5
+                var downloadSuccess = false
+                var lastException: Exception? = null
 
-                // Handle HTTP redirects manually if required
-                var redirectUrl = downloadUrl
-                var currentConn = conn
-                var code = currentConn.responseCode
-                var redirects = 0
-                while ((code == HttpURLConnection.HTTP_MOVED_PERM || code == HttpURLConnection.HTTP_MOVED_TEMP || code == 307 || code == 308) && redirects < 5) {
-                    redirectUrl = currentConn.getHeaderField("Location")
-                    currentConn = (URL(redirectUrl).openConnection() as HttpURLConnection).apply {
-                        connectTimeout = 15000
-                        readTimeout = 30000
-                        setRequestProperty("User-Agent", "iOS-Keyboard-Android")
-                    }
-                    code = currentConn.responseCode
-                    redirects++
-                }
+                while (attempts < maxAttempts && !downloadSuccess) {
+                    attempts++
+                    var conn: HttpURLConnection? = null
+                    try {
+                        val existingBytes = if (targetFile.exists()) targetFile.length() else 0L
+                        if (totalExpectedLength > 0L && existingBytes >= totalExpectedLength) {
+                            downloadSuccess = true
+                            break
+                        }
 
-                val contentLength = currentConn.contentLength
-                currentConn.inputStream.use { input ->
-                    FileOutputStream(targetFile).use { output ->
-                        val buffer = ByteArray(8 * 1024)
-                        var bytesRead: Int
-                        var totalRead = 0L
+                        val (activeConn, totalLength) = openConnectionWithRedirects(downloadUrl, existingBytes)
+                        conn = activeConn
+                        if (totalLength > 0L) {
+                            totalExpectedLength = totalLength
+                        }
 
-                        while (input.read(buffer).also { bytesRead = it } != -1) {
-                            output.write(buffer, 0, bytesRead)
-                            totalRead += bytesRead
-                            if (contentLength > 0) {
-                                val progress = ((totalRead * 100) / contentLength).toInt()
-                                withContext(Dispatchers.Main) {
-                                    onProgress(progress)
+                        val isAppend = conn.responseCode == HttpURLConnection.HTTP_PARTIAL && existingBytes > 0L
+                        if (!isAppend && targetFile.exists()) {
+                            targetFile.delete()
+                        }
+
+                        val initialBytes = if (isAppend) existingBytes else 0L
+                        var totalRead = initialBytes
+
+                        conn.inputStream.use { input ->
+                            FileOutputStream(targetFile, isAppend).use { output ->
+                                val buffer = ByteArray(64 * 1024)
+                                var bytesRead: Int
+
+                                while (input.read(buffer).also { bytesRead = it } != -1) {
+                                    output.write(buffer, 0, bytesRead)
+                                    totalRead += bytesRead
+                                    if (totalExpectedLength > 0L) {
+                                        val progress = ((totalRead * 100) / totalExpectedLength).toInt().coerceIn(0, 99)
+                                        if (progress != lastReportedProgress) {
+                                            lastReportedProgress = progress
+                                            withContext(Dispatchers.Main) {
+                                                onProgress(progress)
+                                            }
+                                        }
+                                    }
                                 }
+                                output.flush()
                             }
                         }
-                        output.flush()
+
+                        if (totalExpectedLength <= 0L || totalRead >= totalExpectedLength) {
+                            downloadSuccess = true
+                        }
+                    } catch (e: Exception) {
+                        lastException = e
+                        Log.w("AppUpdateChecker", "Download attempt $attempts failed: ${e.message}, retrying...")
+                        delay(1000L * attempts)
+                    } finally {
+                        conn?.disconnect()
                     }
                 }
 
-                // Launch Package Installer Intent
+                if (!downloadSuccess) {
+                    throw lastException ?: IOException("Failed to download APK after $maxAttempts attempts")
+                }
+
                 withContext(Dispatchers.Main) {
                     onProgress(100)
                     installApk(context, targetFile)
@@ -157,20 +221,58 @@ object AppUpdateChecker {
         }
     }
 
-    private fun installApk(context: Context, apkFile: File) {
-        val uri = FileProvider.getUriForFile(
-            context,
-            "${context.packageName}.fileprovider",
-            apkFile
-        )
-        val intent = Intent(Intent.ACTION_VIEW).apply {
-            setDataAndType(uri, "application/vnd.android.package-archive")
-            flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+    fun installApk(context: Context, apkFile: File) {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                if (!context.packageManager.canRequestPackageInstalls()) {
+                    val manageIntent = Intent(
+                        Settings.ACTION_MANAGE_UNKNOWN_APP_SOURCES,
+                        Uri.parse("package:${context.packageName}")
+                    ).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(manageIntent)
+                    return
+                }
+            }
+
+            val uri = FileProvider.getUriForFile(
+                context,
+                "${context.packageName}.fileprovider",
+                apkFile
+            )
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "application/vnd.android.package-archive")
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("AppUpdateChecker", "Failed to launch package installer", e)
+            try {
+                val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", apkFile)
+                val intent = Intent(Intent.ACTION_VIEW).apply {
+                    setDataAndType(uri, "application/vnd.android.package-archive")
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_GRANT_READ_URI_PERMISSION
+                }
+                context.startActivity(intent)
+            } catch (e2: Exception) {
+                Log.e("AppUpdateChecker", "Fallback installer also failed", e2)
+            }
         }
-        context.startActivity(intent)
     }
 
-    private fun compareVersions(v1: String, v2: String): Int {
+    fun openInBrowser(context: Context, url: String) {
+        try {
+            val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                flags = Intent.FLAG_ACTIVITY_NEW_TASK
+            }
+            context.startActivity(intent)
+        } catch (e: Exception) {
+            Log.e("AppUpdateChecker", "Failed to open browser", e)
+        }
+    }
+
+    fun compareVersions(v1: String, v2: String): Int {
         val parts1 = v1.split(".").mapNotNull { it.toIntOrNull() }
         val parts2 = v2.split(".").mapNotNull { it.toIntOrNull() }
         val length = maxOf(parts1.size, parts2.size)

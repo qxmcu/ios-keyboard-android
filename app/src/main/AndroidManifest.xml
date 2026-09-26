@@ -7,6 +7,8 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Microphone permission for voice dictation -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- In-app APK update installation permission -->
+    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />
 
     <!-- Android 11+ Package Visibility Queries for zFont 3 & SpeechRecognizer RecognitionService -->
     <queries>

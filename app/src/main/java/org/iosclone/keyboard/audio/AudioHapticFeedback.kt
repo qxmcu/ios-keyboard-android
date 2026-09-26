@@ -30,10 +30,15 @@ class AudioHapticFeedback(private val context: Context) {
     private val loadedSoundIds = mutableSetOf<Int>()
 
     private val vibrator: Vibrator? by lazy {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
-            vibratorManager?.defaultVibrator
-        } else {
+        try {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                val vibratorManager = context.getSystemService(Context.VIBRATOR_MANAGER_SERVICE) as? VibratorManager
+                vibratorManager?.defaultVibrator ?: (context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator)
+            } else {
+                @Suppress("DEPRECATION")
+                context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
+            }
+        } catch (e: Exception) {
             @Suppress("DEPRECATION")
             context.getSystemService(Context.VIBRATOR_SERVICE) as? Vibrator
         }
@@ -49,13 +54,14 @@ class AudioHapticFeedback(private val context: Context) {
 
     private fun initializeAudio() {
         try {
+            // USAGE_MEDIA routes through STREAM_MUSIC, ensuring clicks play even when system UI "Touch sounds" is off
             val attributes = AudioAttributes.Builder()
-                .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
+                .setUsage(AudioAttributes.USAGE_MEDIA)
                 .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
                 .build()
 
             soundPool = SoundPool.Builder()
-                .setMaxStreams(10)
+                .setMaxStreams(12)
                 .setAudioAttributes(attributes)
                 .build().apply {
                     setOnLoadCompleteListener { _, sampleId, status ->
@@ -101,7 +107,7 @@ class AudioHapticFeedback(private val context: Context) {
         if (!enabled || volumePercent <= 0) return
 
         val pool = soundPool
-        val volume = (volumePercent.coerceIn(0, 100) / 100f)
+        val volume = (volumePercent.coerceIn(1, 100) / 100f)
 
         val soundId = when (type) {
             SoundType.STANDARD -> standardSoundId
@@ -139,12 +145,12 @@ class AudioHapticFeedback(private val context: Context) {
 
     /**
      * Replicates the Apple Taptic Engine micro-click tactile sensation.
-     * Guaranteed tactile feedback on Nothing Phone, Samsung Galaxy, and Google Pixel.
+     * Calibrated specifically for Nothing OS AAC LRA motors, Pixel, and Galaxy haptic hardware.
      */
     fun performHapticFeedback(type: SoundType, enabled: Boolean, intensityPercent: Int, view: View? = null) {
         if (!enabled || intensityPercent <= 0) return
 
-        // 1. Direct View Haptic Feedback (bypasses device touch feedback toggles)
+        // 1. Direct View Haptic Feedback (bypasses device touch feedback toggles when supported)
         if (view != null) {
             try {
                 val flag = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
@@ -161,49 +167,31 @@ class AudioHapticFeedback(private val context: Context) {
             } catch (ignored: Exception) {}
         }
 
-        // 2. Hardware Vibrator pipeline - uses createOneShot to guarantee sharp LRA pulse on Nothing OS
+        // 2. Hardware Vibrator pipeline - calibrated createOneShot guarantees sharp LRA pulse on Nothing OS
         val vib = vibrator ?: return
         if (!vib.hasVibrator()) return
 
         try {
             val scale = intensityPercent.coerceIn(1, 100) / 100f
             val (durationMs, amplitude) = when (type) {
-                SoundType.STANDARD -> Pair(14L, (180 * scale).toInt().coerceIn(1, 255))
-                SoundType.DELETE -> Pair(16L, (210 * scale).toInt().coerceIn(1, 255))
-                SoundType.RETURN_SPACE -> Pair(20L, (240 * scale).toInt().coerceIn(1, 255))
+                SoundType.STANDARD -> Pair(26L, (140 + (115 * scale)).toInt().coerceIn(1, 255))
+                SoundType.DELETE -> Pair(28L, (160 + (95 * scale)).toInt().coerceIn(1, 255))
+                SoundType.RETURN_SPACE -> Pair(32L, (180 + (75 * scale)).toInt().coerceIn(1, 255))
             }
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                var effect: VibrationEffect? = null
-                // Attempt predefined effect if supported by OEM HAL (e.g. Pixel), otherwise fallback to createOneShot
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val effect = VibrationEffect.createOneShot(durationMs, amplitude)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     try {
-                        val predefined = when (type) {
-                            SoundType.STANDARD -> VibrationEffect.EFFECT_TICK
-                            SoundType.DELETE -> VibrationEffect.EFFECT_CLICK
-                            SoundType.RETURN_SPACE -> VibrationEffect.EFFECT_CLICK
-                        }
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && vib.areAllEffectsSupported(predefined) == Vibrator.VIBRATION_EFFECT_SUPPORT_YES) {
-                            effect = VibrationEffect.createPredefined(predefined)
-                        }
-                    } catch (ignored: Exception) {}
-                }
-
-                if (effect == null) {
-                    effect = VibrationEffect.createOneShot(durationMs, amplitude)
-                }
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    val attrs = VibrationAttributes.Builder()
-                        .setUsage(VibrationAttributes.USAGE_TOUCH)
-                        .build()
-                    vib.vibrate(effect, attrs)
+                        val attrs = VibrationAttributes.Builder()
+                            .setUsage(VibrationAttributes.USAGE_KEYBOARD_CHORD)
+                            .build()
+                        vib.vibrate(effect, attrs)
+                    } catch (e: Exception) {
+                        vib.vibrate(effect)
+                    }
                 } else {
-                    val audioAttrs = AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                        .build()
-                    vib.vibrate(effect, audioAttrs)
+                    vib.vibrate(effect)
                 }
             } else {
                 @Suppress("DEPRECATION")
@@ -236,36 +224,26 @@ class AudioHapticFeedback(private val context: Context) {
 
         try {
             val scale = intensityPercent.coerceIn(1, 100) / 100f
-            val amplitude = (255 * scale).toInt().coerceIn(1, 255)
+            val amplitude = (200 + (55 * scale)).toInt().coerceIn(1, 255)
+            val durationMs = 45L
 
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                var effect: VibrationEffect? = null
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                val effect = VibrationEffect.createOneShot(durationMs, amplitude)
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     try {
-                        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R && vib.areAllEffectsSupported(VibrationEffect.EFFECT_HEAVY_CLICK) == Vibrator.VIBRATION_EFFECT_SUPPORT_YES) {
-                            effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
-                        }
-                    } catch (ignored: Exception) {}
-                }
-                if (effect == null) {
-                    effect = VibrationEffect.createOneShot(32L, amplitude)
-                }
-
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
-                    val attrs = VibrationAttributes.Builder()
-                        .setUsage(VibrationAttributes.USAGE_TOUCH)
-                        .build()
-                    vib.vibrate(effect, attrs)
+                        val attrs = VibrationAttributes.Builder()
+                            .setUsage(VibrationAttributes.USAGE_KEYBOARD_CHORD)
+                            .build()
+                        vib.vibrate(effect, attrs)
+                    } catch (e: Exception) {
+                        vib.vibrate(effect)
+                    }
                 } else {
-                    val audioAttrs = AudioAttributes.Builder()
-                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
-                        .setUsage(AudioAttributes.USAGE_ASSISTANCE_SONIFICATION)
-                        .build()
-                    vib.vibrate(effect, audioAttrs)
+                    vib.vibrate(effect)
                 }
             } else {
                 @Suppress("DEPRECATION")
-                vib.vibrate(32L)
+                vib.vibrate(durationMs)
             }
         } catch (e: Exception) {
             Log.e(tag, "Long press vibration failed", e)

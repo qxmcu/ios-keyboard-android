@@ -524,26 +524,53 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                             currentVersion = "1.2.7",
                             onResult = { info ->
                                 isCheckingUpdate = false
+                                val downloadAction: (String) -> Unit = { url ->
+                                    updateSubtitle = "Downloading update…"
+                                    updateProgress = 0
+                                    AppUpdateChecker.downloadAndInstall(
+                                        context = context,
+                                        downloadUrl = url,
+                                        onProgress = { p -> updateProgress = p },
+                                        onError = { err ->
+                                            updateProgress = -1
+                                            updateSubtitle = "Download failed"
+                                            AlertDialog.Builder(context)
+                                                .setTitle("Update Download Failed")
+                                                .setMessage("In-app download was interrupted: $err\n\nWould you like to open your browser to download the APK directly?")
+                                                .setPositiveButton("Open Browser") { _, _ ->
+                                                    AppUpdateChecker.openInBrowser(context, url)
+                                                }
+                                                .setNegativeButton("Cancel", null)
+                                                .show()
+                                        }
+                                    )
+                                }
+
                                 if (info.hasUpdate && info.apkDownloadUrl != null) {
                                     updateSubtitle = "Update available: ${info.latestVersion}"
                                     AlertDialog.Builder(context)
                                         .setTitle("Software Update Available")
                                         .setMessage("A new version (${info.latestVersion}) of iOS Keyboard is available.\n\nRelease Notes:\n${info.releaseNotes}\n\nWould you like to download and install now?")
                                         .setPositiveButton("Update Now") { _, _ ->
-                                            updateSubtitle = "Downloading update…"
-                                            updateProgress = 0
-                                            AppUpdateChecker.downloadAndInstall(
-                                                context = context,
-                                                downloadUrl = info.apkDownloadUrl,
-                                                onProgress = { p -> updateProgress = p },
-                                                onError = { err ->
-                                                    updateProgress = -1
-                                                    updateSubtitle = "Download failed"
-                                                    Toast.makeText(context, "Update failed: $err", Toast.LENGTH_LONG).show()
-                                                }
-                                            )
+                                            downloadAction(info.apkDownloadUrl)
+                                        }
+                                        .setNeutralButton("Browser") { _, _ ->
+                                            AppUpdateChecker.openInBrowser(context, info.apkDownloadUrl)
                                         }
                                         .setNegativeButton("Later", null)
+                                        .show()
+                                } else if (info.apkDownloadUrl != null) {
+                                    updateSubtitle = "iOS Keyboard is up to date (${info.latestVersion})"
+                                    AlertDialog.Builder(context)
+                                        .setTitle("Latest Version Installed")
+                                        .setMessage("You have the latest version (${info.latestVersion}). Would you like to reinstall or update from the latest build?")
+                                        .setPositiveButton("Reinstall") { _, _ ->
+                                            downloadAction(info.apkDownloadUrl)
+                                        }
+                                        .setNeutralButton("Browser") { _, _ ->
+                                            AppUpdateChecker.openInBrowser(context, info.apkDownloadUrl)
+                                        }
+                                        .setNegativeButton("Cancel", null)
                                         .show()
                                 } else {
                                     updateSubtitle = "iOS Keyboard is up to date (v1.2.7)"
