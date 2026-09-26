@@ -113,13 +113,12 @@ object KeyboardLayoutFactory {
             )
         )
 
-        // Row 4 (Bottom Bar)
+        // Row 4 (Bottom Bar: 123, Emoji, Space, Return)
         val row4Keys = listOf(
-            KeyDefinition(code = -2, label = "123", keyType = KeyType.SWITCH_NUMERIC, weight = 1.4f),
-            KeyDefinition(code = -10, label = "🌐", keyType = KeyType.GLOBE, weight = 1.0f),
-            KeyDefinition(code = -11, label = "🎤", keyType = KeyType.DICTATION, weight = 0.9f),
-            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = 4.2f),
-            KeyDefinition(code = -4, label = "return", keyType = KeyType.RETURN, weight = 2.1f)
+            KeyDefinition(code = -2, label = "123", keyType = KeyType.SWITCH_NUMERIC, weight = 1.35f),
+            KeyDefinition(code = -7, label = "🙂", keyType = KeyType.EMOJI, weight = 1.15f),
+            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = 5.0f),
+            KeyDefinition(code = -4, label = "↵", keyType = KeyType.RETURN, weight = 1.85f)
         )
 
         return listOf(row1, row2, row3Keys, row4Keys)
@@ -149,11 +148,10 @@ object KeyboardLayoutFactory {
         row3Keys.add(KeyDefinition(code = -5, label = "⌫", keyType = KeyType.DELETE, weight = 1.4f))
 
         val row4Keys = listOf(
-            KeyDefinition(code = -1, label = "ABC", keyType = KeyType.SWITCH_ALPHA, weight = 1.4f),
-            KeyDefinition(code = -10, label = "🌐", keyType = KeyType.GLOBE, weight = 1.0f),
-            KeyDefinition(code = -11, label = "🎤", keyType = KeyType.DICTATION, weight = 0.9f),
-            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = 4.2f),
-            KeyDefinition(code = -4, label = "return", keyType = KeyType.RETURN, weight = 2.1f)
+            KeyDefinition(code = -1, label = "ABC", keyType = KeyType.SWITCH_ALPHA, weight = 1.35f),
+            KeyDefinition(code = -7, label = "🙂", keyType = KeyType.EMOJI, weight = 1.15f),
+            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = 5.0f),
+            KeyDefinition(code = -4, label = "↵", keyType = KeyType.RETURN, weight = 1.85f)
         )
 
         return listOf(row1, row2, row3Keys, row4Keys)
@@ -182,11 +180,10 @@ object KeyboardLayoutFactory {
         row3Keys.add(KeyDefinition(code = -5, label = "⌫", keyType = KeyType.DELETE, weight = 1.4f))
 
         val row4Keys = listOf(
-            KeyDefinition(code = -1, label = "ABC", keyType = KeyType.SWITCH_ALPHA, weight = 1.4f),
-            KeyDefinition(code = -10, label = "🌐", keyType = KeyType.GLOBE, weight = 1.0f),
-            KeyDefinition(code = -11, label = "🎤", keyType = KeyType.DICTATION, weight = 0.9f),
-            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = 4.2f),
-            KeyDefinition(code = -4, label = "return", keyType = KeyType.RETURN, weight = 2.1f)
+            KeyDefinition(code = -1, label = "ABC", keyType = KeyType.SWITCH_ALPHA, weight = 1.35f),
+            KeyDefinition(code = -7, label = "🙂", keyType = KeyType.EMOJI, weight = 1.15f),
+            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = 5.0f),
+            KeyDefinition(code = -4, label = "↵", keyType = KeyType.RETURN, weight = 1.85f)
         )
 
         return listOf(row1, row2, row3Keys, row4Keys)

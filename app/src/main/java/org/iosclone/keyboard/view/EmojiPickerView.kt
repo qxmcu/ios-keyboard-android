@@ -4,22 +4,23 @@ import android.app.Dialog
 import android.content.Context
 import android.graphics.Color
 import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
 import android.text.Editable
 import android.text.TextWatcher
 import android.util.AttributeSet
 import android.view.Gravity
+import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
 import android.view.Window
 import android.widget.EditText
-import android.widget.FrameLayout
-import android.widget.GridLayout
 import android.widget.HorizontalScrollView
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.ScrollView
 import android.widget.TextView
 import androidx.core.content.ContextCompat
+import androidx.recyclerview.widget.GridLayoutManager
+import androidx.recyclerview.widget.RecyclerView
 import org.iosclone.keyboard.emoji.EmojiCategory
 import org.iosclone.keyboard.emoji.EmojiData
 import org.iosclone.keyboard.emoji.EmojiItem
@@ -36,30 +37,59 @@ class EmojiPickerView @JvmOverloads constructor(
     var onEmojiSelected: ((String) -> Unit)? = null
     var onBackspaceClicked: (() -> Unit)? = null
     var onBackToAlphaClicked: (() -> Unit)? = null
+    var onGlobeClicked: (() -> Unit)? = null
+    var onDictationClicked: (() -> Unit)? = null
 
     private val searchEditText: EditText
-    private val emojiScrollView: ScrollView
-    private val emojiGrid: GridLayout
-    private val categoryIconsLayout: LinearLayout
+    private val searchContainer: LinearLayout
+    private val recyclerView: RecyclerView
+    private val bottomNav: LinearLayout
     private val backToAlphaBtn: TextView
     private val backspaceBtn: ImageView
+    private val bottomBarLayout: LinearLayout
+    private val globeIconView: ImageView
+    private val micIconView: ImageView
 
     private var currentCategory: EmojiCategory = EmojiCategory.SMILEYS
     private val categoryIconViews = mutableMapOf<EmojiCategory, ImageView>()
     private val recentEmojis = mutableListOf<String>()
+
+    private var currentTheme: ThemeColors = ThemeColors.Light
+    private val adapter: EmojiRecyclerAdapter
 
     init {
         orientation = VERTICAL
         val density = resources.displayMetrics.density
 
         // 1. Top Search Bar
-        val searchContainer = LinearLayout(context).apply {
+        searchContainer = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
             val padH = (12 * density).toInt()
-            val padV = (6 * density).toInt()
+            val padV = (5 * density).toInt()
             setPadding(padH, padV, padH, padV)
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, (44 * density).toInt())
+        }
+
+        val searchPill = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            val padPillH = (10 * density).toInt()
+            val padPillV = (6 * density).toInt()
+            setPadding(padPillH, padPillV, padPillH, padPillV)
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, (34 * density).toInt())
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#E3E5E8"))
+                cornerRadius = 17f * density
+            }
+        }
+
+        val searchIcon = TextView(context).apply {
+            text = "🔍"
+            textSize = 13f
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
+                marginEnd = (6 * density).toInt()
+            }
         }
 
         searchEditText = EditText(context).apply {
@@ -67,36 +97,38 @@ class EmojiPickerView @JvmOverloads constructor(
             textSize = 14f
             maxLines = 1
             isSingleLine = true
-            val pad = (8 * density).toInt()
-            setPadding(pad, pad, pad, pad)
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, (34 * density).toInt())
-            background = ContextCompat.getDrawable(context, android.R.drawable.editbox_background_normal)
+            background = null
+            setPadding(0, 0, 0, 0)
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         }
-        searchContainer.addView(searchEditText)
+
+        searchPill.addView(searchIcon)
+        searchPill.addView(searchEditText)
+        searchContainer.addView(searchPill)
         addView(searchContainer)
 
-        // 2. Emoji Grid Container (Scrollable)
-        emojiScrollView = ScrollView(context).apply {
+        // 2. Ultra-Smooth RecyclerView Emoji Grid
+        recyclerView = RecyclerView(context).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1.0f)
-            isVerticalScrollBarEnabled = true
-        }
-
-        emojiGrid = GridLayout(context).apply {
-            columnCount = 8
-            alignmentMode = GridLayout.ALIGN_BOUNDS
-            useDefaultMargins = false
-            layoutParams = FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
+            layoutManager = GridLayoutManager(context, 8)
+            setHasFixedSize(true)
+            setItemViewCacheSize(64)
             val gridPad = (4 * density).toInt()
-            setPadding(gridPad, gridPad, gridPad, gridPad)
+            setPadding(gridPad, 0, gridPad, 0)
         }
-        emojiScrollView.addView(emojiGrid)
-        addView(emojiScrollView)
 
-        // 3. Bottom Navigation Bar
-        val bottomNav = LinearLayout(context).apply {
+        adapter = EmojiRecyclerAdapter(
+            onItemClick = { emoji -> onEmojiClicked(emoji) },
+            onItemLongClick = { item, anchor -> showSkinToneSelector(item, anchor) }
+        )
+        recyclerView.adapter = adapter
+        addView(recyclerView)
+
+        // 3. Bottom Bar: ABC, Category Strip, Backspace
+        bottomNav = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, (44 * density).toInt())
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, (42 * density).toInt())
             val navPad = (6 * density).toInt()
             setPadding(navPad, 0, navPad, 0)
         }
@@ -105,7 +137,14 @@ class EmojiPickerView @JvmOverloads constructor(
             text = "ABC"
             textSize = 15f
             gravity = Gravity.CENTER
-            layoutParams = LayoutParams((50 * density).toInt(), LayoutParams.MATCH_PARENT)
+            typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+            layoutParams = LayoutParams((46 * density).toInt(), (34 * density).toInt()).apply {
+                marginEnd = (4 * density).toInt()
+            }
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#B2B6BE"))
+                cornerRadius = 5f * density
+            }
             setOnClickListener { onBackToAlphaClicked?.invoke() }
         }
         bottomNav.addView(backToAlphaBtn)
@@ -115,15 +154,14 @@ class EmojiPickerView @JvmOverloads constructor(
             isHorizontalScrollBarEnabled = false
         }
 
-        categoryIconsLayout = LinearLayout(context).apply {
+        val categoryIconsLayout = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
-            layoutParams = FrameLayout.LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT)
+            layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.MATCH_PARENT)
         }
 
-        // Add category icon buttons
-        val catIconSize = (22 * density).toInt()
-        val catIconPad = (8 * density).toInt()
+        val catIconSize = (20 * density).toInt()
+        val catIconPad = (7 * density).toInt()
 
         for (cat in EmojiCategory.entries) {
             val iconView = ImageView(context).apply {
@@ -131,9 +169,7 @@ class EmojiPickerView @JvmOverloads constructor(
                 setPadding(catIconPad, catIconPad, catIconPad, catIconPad)
                 val id = context.resources.getIdentifier(cat.iconResName, "drawable", context.packageName)
                 if (id != 0) setImageResource(id)
-                setOnClickListener {
-                    selectCategory(cat)
-                }
+                setOnClickListener { selectCategory(cat) }
             }
             categoryIconViews[cat] = iconView
             categoryIconsLayout.addView(iconView)
@@ -141,25 +177,64 @@ class EmojiPickerView @JvmOverloads constructor(
         catScrollView.addView(categoryIconsLayout)
         bottomNav.addView(catScrollView)
 
-        // Backspace key
         backspaceBtn = ImageView(context).apply {
-            layoutParams = LayoutParams((44 * density).toInt(), LayoutParams.MATCH_PARENT)
-            val bsPad = (10 * density).toInt()
+            layoutParams = LayoutParams((42 * density).toInt(), (34 * density).toInt()).apply {
+                marginStart = (4 * density).toInt()
+            }
+            val bsPad = (7 * density).toInt()
             setPadding(bsPad, bsPad, bsPad, bsPad)
             val id = context.resources.getIdentifier("ic_backspace", "drawable", context.packageName)
             if (id != 0) setImageResource(id)
+            background = GradientDrawable().apply {
+                setColor(Color.parseColor("#B2B6BE"))
+                cornerRadius = 5f * density
+            }
             setOnClickListener { onBackspaceClicked?.invoke() }
         }
         bottomNav.addView(backspaceBtn)
         addView(bottomNav)
 
-        // Setup search filter listener
+        // 4. Floating Bottom Inset Bar: Globe on left, Dictation on right
+        bottomBarLayout = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER_VERTICAL
+            layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, (38 * density).toInt())
+            val padH = (14 * density).toInt()
+            setPadding(padH, 0, padH, 0)
+        }
+
+        globeIconView = ImageView(context).apply {
+            val size = (24 * density).toInt()
+            layoutParams = LayoutParams(size, size)
+            val id = context.resources.getIdentifier("ic_globe", "drawable", context.packageName)
+            if (id != 0) setImageResource(id)
+            setOnClickListener { onGlobeClicked?.invoke() ?: onBackToAlphaClicked?.invoke() }
+        }
+
+        val spaceHolder = View(context).apply {
+            layoutParams = LayoutParams(0, 1, 1.0f)
+        }
+
+        micIconView = ImageView(context).apply {
+            val size = (24 * density).toInt()
+            layoutParams = LayoutParams(size, size)
+            val id = context.resources.getIdentifier("ic_dictation", "drawable", context.packageName)
+            if (id != 0) setImageResource(id)
+            setOnClickListener { onDictationClicked?.invoke() }
+        }
+
+        bottomBarLayout.addView(globeIconView)
+        bottomBarLayout.addView(spaceHolder)
+        bottomBarLayout.addView(micIconView)
+        addView(bottomBarLayout)
+
+        // Setup real-time search
         searchEditText.addTextChangedListener(object : TextWatcher {
             override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
             override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {
                 val query = s?.toString()?.trim() ?: ""
                 if (query.isNotEmpty()) {
-                    displayEmojis(EmojiData.search(query))
+                    adapter.setItems(EmojiData.search(query))
                 } else {
                     selectCategory(currentCategory)
                 }
@@ -167,7 +242,6 @@ class EmojiPickerView @JvmOverloads constructor(
             override fun afterTextChanged(s: Editable?) {}
         })
 
-        // Initial populate
         selectCategory(EmojiCategory.SMILEYS)
     }
 
@@ -182,45 +256,14 @@ class EmojiPickerView @JvmOverloads constructor(
             EmojiData.getEmojisForCategory(category)
         }
 
-        displayEmojis(emojis)
-        emojiScrollView.scrollTo(0, 0)
+        adapter.setItems(emojis)
+        recyclerView.scrollToPosition(0)
     }
 
     private fun updateCategoryIconHighlights() {
         for ((cat, icon) in categoryIconViews) {
             val isSelected = (cat == currentCategory)
-            icon.alpha = if (isSelected) 1.0f else 0.45f
-        }
-    }
-
-    private fun displayEmojis(items: List<EmojiItem>) {
-        emojiGrid.removeAllViews()
-        val density = resources.displayMetrics.density
-        val screenWidth = resources.displayMetrics.widthPixels
-        val itemSize = (screenWidth / 8).coerceAtLeast((40 * density).toInt())
-
-        for (item in items) {
-            val emojiTv = EmojiTextView(context).apply {
-                text = item.unicode
-                textSize = 28f
-                gravity = Gravity.CENTER
-                layoutParams = GridLayout.LayoutParams().apply {
-                    width = itemSize
-                    height = itemSize
-                }
-
-                setOnClickListener {
-                    onEmojiClicked(item.unicode)
-                }
-
-                if (item.supportsSkinTone) {
-                    setOnLongClickListener {
-                        showSkinToneSelector(item, this)
-                        true
-                    }
-                }
-            }
-            emojiGrid.addView(emojiTv)
+            icon.alpha = if (isSelected) 1.0f else 0.40f
         }
     }
 
@@ -242,7 +285,11 @@ class EmojiPickerView @JvmOverloads constructor(
             orientation = HORIZONTAL
             val pad = (6 * density).toInt()
             setPadding(pad, pad, pad, pad)
-            background = ContextCompat.getDrawable(context, android.R.drawable.dialog_holo_light_frame)
+            background = GradientDrawable().apply {
+                setColor(if (currentTheme.isDark) Color.parseColor("#3A3A3C") else Color.parseColor("#FFFFFF"))
+                cornerRadius = 12f * density
+                setStroke((1 * density).toInt(), if (currentTheme.isDark) 0x33FFFFFF else 0x22000000)
+            }
         }
 
         for (tone in EmojiSkinTone.entries) {
@@ -266,18 +313,75 @@ class EmojiPickerView @JvmOverloads constructor(
     }
 
     fun applyTheme(theme: ThemeColors) {
+        currentTheme = theme
         setBackgroundColor(theme.keyboardBackground)
-        emojiScrollView.setBackgroundColor(theme.keyboardBackground)
+        recyclerView.setBackgroundColor(theme.keyboardBackground)
 
         searchEditText.setTextColor(theme.textPrimary)
         searchEditText.setHintTextColor(theme.textSecondary)
 
         backToAlphaBtn.setTextColor(theme.textPrimary)
+        backToAlphaBtn.background = GradientDrawable().apply {
+            setColor(theme.modifierKeyBackground)
+            cornerRadius = 5f * resources.displayMetrics.density
+        }
+
         backspaceBtn.setColorFilter(theme.textPrimary)
+        backspaceBtn.background = GradientDrawable().apply {
+            setColor(theme.modifierKeyBackground)
+            cornerRadius = 5f * resources.displayMetrics.density
+        }
+
+        globeIconView.setColorFilter(theme.textPrimary)
+        micIconView.setColorFilter(theme.textPrimary)
 
         for ((_, icon) in categoryIconViews) {
             icon.setColorFilter(theme.textPrimary)
         }
         updateCategoryIconHighlights()
+    }
+
+    // RecyclerView Adapter for high-performance 60fps emoji rendering
+    private class EmojiRecyclerAdapter(
+        private val onItemClick: (String) -> Unit,
+        private val onItemLongClick: (EmojiItem, View) -> Unit
+    ) : RecyclerView.Adapter<EmojiRecyclerAdapter.ViewHolder>() {
+
+        private val items = mutableListOf<EmojiItem>()
+
+        fun setItems(newItems: List<EmojiItem>) {
+            items.clear()
+            items.addAll(newItems)
+            notifyDataSetChanged()
+        }
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): ViewHolder {
+            val density = parent.context.resources.displayMetrics.density
+            val tv = EmojiTextView(parent.context).apply {
+                textSize = 28f
+                gravity = Gravity.CENTER
+                val cellHeight = (44 * density).toInt()
+                layoutParams = ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, cellHeight)
+            }
+            return ViewHolder(tv)
+        }
+
+        override fun onBindViewHolder(holder: ViewHolder, position: Int) {
+            val item = items[position]
+            holder.tv.text = item.unicode
+            holder.tv.setOnClickListener { onItemClick(item.unicode) }
+            if (item.supportsSkinTone) {
+                holder.tv.setOnLongClickListener {
+                    onItemLongClick(item, holder.tv)
+                    true
+                }
+            } else {
+                holder.tv.setOnLongClickListener(null)
+            }
+        }
+
+        override fun getItemCount(): Int = items.size
+
+        class ViewHolder(val tv: EmojiTextView) : RecyclerView.ViewHolder(tv)
     }
 }

@@ -1,6 +1,8 @@
 package org.iosclone.keyboard.view
 
 import android.content.Context
+import android.graphics.Color
+import android.graphics.drawable.GradientDrawable
 import android.util.AttributeSet
 import android.view.Gravity
 import android.view.View
@@ -12,7 +14,6 @@ import android.widget.TextView
 import org.iosclone.keyboard.clipboard.ClipboardEntry
 import org.iosclone.keyboard.clipboard.ClipboardManagerHelper
 import org.iosclone.keyboard.theme.ThemeColors
-import androidx.core.content.ContextCompat
 
 class ClipboardDrawerView @JvmOverloads constructor(
     context: Context,
@@ -30,6 +31,7 @@ class ClipboardDrawerView @JvmOverloads constructor(
     private val scrollView: ScrollView
 
     private var clipboardHelper: ClipboardManagerHelper? = null
+    private var currentTheme: ThemeColors = ThemeColors.Light
 
     init {
         orientation = VERTICAL
@@ -54,7 +56,7 @@ class ClipboardDrawerView @JvmOverloads constructor(
 
         clearAllBtn = TextView(context).apply {
             text = "Clear All"
-            textSize = 14f
+            textSize = 15f
             val pad = (8 * density).toInt()
             setPadding(pad, pad, pad, pad)
             setOnClickListener {
@@ -65,7 +67,7 @@ class ClipboardDrawerView @JvmOverloads constructor(
 
         closeBtn = TextView(context).apply {
             text = "Done"
-            textSize = 15f
+            textSize = 16f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             val pad = (8 * density).toInt()
             setPadding(pad, pad, pad, pad)
@@ -80,12 +82,13 @@ class ClipboardDrawerView @JvmOverloads constructor(
         // 2. Scrollable list of clips
         scrollView = ScrollView(context).apply {
             layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, 0, 1.0f)
+            isVerticalScrollBarEnabled = true
         }
 
         clipsContainer = LinearLayout(context).apply {
             orientation = VERTICAL
-            val pad = (8 * density).toInt()
-            setPadding(pad, 0, pad, pad)
+            val pad = (10 * density).toInt()
+            setPadding(pad, (4 * density).toInt(), pad, pad)
             layoutParams = FrameLayout.LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT)
         }
         scrollView.addView(clipsContainer)
@@ -109,7 +112,8 @@ class ClipboardDrawerView @JvmOverloads constructor(
                 text = "Clipboard is empty"
                 textSize = 14f
                 gravity = Gravity.CENTER
-                setPadding(0, (40 * density).toInt(), 0, 0)
+                setTextColor(currentTheme.textSecondary)
+                setPadding(0, (48 * density).toInt(), 0, 0)
             }
             clipsContainer.addView(emptyTv)
             return
@@ -119,27 +123,37 @@ class ClipboardDrawerView @JvmOverloads constructor(
             val card = LinearLayout(context).apply {
                 orientation = HORIZONTAL
                 gravity = Gravity.CENTER_VERTICAL
-                val cardPad = (10 * density).toInt()
-                setPadding(cardPad, cardPad, cardPad, cardPad)
+                val cardPadH = (12 * density).toInt()
+                val cardPadV = (10 * density).toInt()
+                setPadding(cardPadH, cardPadV, cardPadH, cardPadV)
                 val marginV = (4 * density).toInt()
                 layoutParams = LayoutParams(LayoutParams.MATCH_PARENT, LayoutParams.WRAP_CONTENT).apply {
                     setMargins(0, marginV, 0, marginV)
                 }
-                background = ContextCompat.getDrawable(context, android.R.drawable.dialog_holo_light_frame)
+                background = GradientDrawable().apply {
+                    setColor(currentTheme.keyBackground)
+                    cornerRadius = 10f * density
+                    setStroke((1 * density).toInt(), if (currentTheme.isDark) 0x22FFFFFF else 0x18000000)
+                }
+                elevation = 2f * density
             }
 
             val textTv = TextView(context).apply {
                 text = clip.text
-                textSize = 14f
+                textSize = 14.5f
                 maxLines = 2
                 ellipsize = android.text.TextUtils.TruncateAt.END
-                layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1.0f)
+                setTextColor(currentTheme.textPrimary)
+                layoutParams = LayoutParams(0, LayoutParams.WRAP_CONTENT, 1.0f).apply {
+                    marginEnd = (8 * density).toInt()
+                }
             }
 
             // Pin button
             val pinBtn = TextView(context).apply {
-                text = if (clip.isPinned) "📌" else "📍"
-                textSize = 16f
+                text = if (clip.isPinned) "★" else "☆"
+                textSize = 18f
+                setTextColor(if (clip.isPinned) currentTheme.accentBlue else currentTheme.textSecondary)
                 val pad = (6 * density).toInt()
                 setPadding(pad, pad, pad, pad)
                 setOnClickListener {
@@ -151,7 +165,8 @@ class ClipboardDrawerView @JvmOverloads constructor(
             // Delete button
             val deleteBtn = TextView(context).apply {
                 text = "✕"
-                textSize = 15f
+                textSize = 14f
+                setTextColor(currentTheme.textSecondary)
                 val pad = (6 * density).toInt()
                 setPadding(pad, pad, pad, pad)
                 setOnClickListener {
@@ -172,9 +187,11 @@ class ClipboardDrawerView @JvmOverloads constructor(
     }
 
     fun applyTheme(theme: ThemeColors) {
+        currentTheme = theme
         setBackgroundColor(theme.keyboardBackground)
         headerTitle.setTextColor(theme.textPrimary)
         closeBtn.setTextColor(theme.accentBlue)
         clearAllBtn.setTextColor(theme.accentBlue)
+        refreshClips()
     }
 }

@@ -26,6 +26,8 @@ import org.iosclone.keyboard.service.KeyboardActionListener
 import org.iosclone.keyboard.settings.KeyboardPreferences
 import org.iosclone.keyboard.theme.KeyboardTheme
 import org.iosclone.keyboard.theme.ThemeColors
+import android.content.Intent
+import org.iosclone.keyboard.settings.SettingsActivity
 import kotlin.math.abs
 
 class IOSKeyboardView @JvmOverloads constructor(
@@ -111,10 +113,13 @@ class IOSKeyboardView @JvmOverloads constructor(
             if (key.keyType == KeyType.SPACE && preferences.spacebarTrackpadEnabled) {
                 // Activate Trackpad Mode!
                 isTrackpadMode = true
-                audioHapticFeedback?.performLongPressHaptic(preferences.hapticsEnabled, preferences.hapticsIntensity)
+                audioHapticFeedback?.performLongPressHaptic(preferences.hapticsEnabled, preferences.hapticsIntensity, this)
                 invalidate()
+            } else if (key.keyType == KeyType.GLOBE || key.keyType == KeyType.EMOJI) {
+                audioHapticFeedback?.performLongPressHaptic(preferences.hapticsEnabled, preferences.hapticsIntensity, this)
+                showLanguageContextMenu()
             } else if (key.accents.isNotEmpty()) {
-                audioHapticFeedback?.performLongPressHaptic(preferences.hapticsEnabled, preferences.hapticsIntensity)
+                audioHapticFeedback?.performLongPressHaptic(preferences.hapticsEnabled, preferences.hapticsIntensity, this)
                 invalidate()
             }
         }
@@ -147,18 +152,20 @@ class IOSKeyboardView @JvmOverloads constructor(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val density = resources.displayMetrics.density
-        // iOS standard keyboard height: 216dp in portrait + bottom inset
-        val baseHeight = (220f * density * preferences.keyboardHeightFactor) + bottomInset
+        // iOS standard keyboard height: 216dp in portrait + bottom inset (min 40dp for floating buttons)
+        val effectiveBottomInset = bottomInset.coerceAtLeast(40f * density)
+        val baseHeight = (216f * density * preferences.keyboardHeightFactor) + effectiveBottomInset
         val height = baseHeight.toInt()
         setMeasuredDimension(width, height)
 
-        layout?.measure(width.toFloat(), height.toFloat(), density, bottomInset)
+        layout?.measure(width.toFloat(), height.toFloat(), density, effectiveBottomInset)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val density = resources.displayMetrics.density
-        layout?.measure(w.toFloat(), h.toFloat(), density, bottomInset)
+        val effectiveBottomInset = bottomInset.coerceAtLeast(40f * density)
+        layout?.measure(w.toFloat(), h.toFloat(), density, effectiveBottomInset)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -180,28 +187,40 @@ class IOSKeyboardView @JvmOverloads constructor(
             }
         }
 
-        // 3. One-handed docking sidebar button
+        // 3. Floating bottom bar buttons (Globe on left, Dictation on right)
+        if (!l.globeButtonBounds.isEmpty) {
+            val pressedGlobe = (pressedKey == l.globeKeyDefinition)
+            val globeTint = if (pressedGlobe) currentTheme.accentBlue else currentTheme.textPrimary
+            drawKeyIcon(canvas, "ic_globe", l.globeButtonBounds, globeTint, density)
+        }
+        if (!l.dictationButtonBounds.isEmpty) {
+            val pressedDict = (pressedKey == l.dictationKeyDefinition)
+            val dictTint = if (pressedDict) currentTheme.accentBlue else currentTheme.textPrimary
+            drawKeyIcon(canvas, "ic_dictation", l.dictationButtonBounds, dictTint, density)
+        }
+
+        // 4. One-handed docking sidebar button
         if (l.oneHandedMode != OneHandedMode.NORMAL && !l.oneHandedSideButtonBounds.isEmpty) {
             drawOneHandedSidebar(canvas, l, density)
         }
 
-        // 4. Trackpad Mode Overlay
+        // 5. Trackpad Mode Overlay
         if (isTrackpadMode) {
             trackpadOverlayPaint.color = currentTheme.trackpadHighlightColor
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), trackpadOverlayPaint)
         }
 
-        // 5. Glide Typing Trail
+        // 6. Glide Typing Trail
         if (isGliding && preferences.gestureTypingEnabled) {
             gestureTrailRenderer.draw(canvas, currentTheme.gestureTrailColor, 8f * density)
         }
 
-        // 6. Long-press accent popover
+        // 7. Long-press accent popover
         val currentPressed = pressedKey
         if (currentPressed != null && currentPressed.accents.isNotEmpty() && !isGliding && !isTrackpadMode) {
             longPressPopup.draw(canvas, currentPressed, width.toFloat(), currentTheme, density)
         } else if (currentPressed != null && preferences.keyPopupsEnabled && !isGliding && !isTrackpadMode) {
-            // 7. Key Magnifier Popup Bubble
+            // 8. Key Magnifier Popup Bubble
             magnifierPopup.draw(canvas, currentPressed, currentTheme, density)
         }
     }
@@ -253,22 +272,55 @@ class IOSKeyboardView @JvmOverloads constructor(
             KeyType.GLOBE -> {
                 drawKeyIcon(canvas, "ic_globe", bounds, currentTheme.textPrimary, density)
             }
+            KeyType.EMOJI -> {
+                drawKeyIcon(canvas, "ic_emoji", bounds, currentTheme.textPrimary, density)
+            }
             KeyType.DICTATION -> {
                 drawKeyIcon(canvas, "ic_dictation", bounds, currentTheme.textPrimary, density)
             }
             KeyType.RETURN -> {
                 val displayLabel = layout?.returnKeyLabel ?: "return"
                 textPaint.color = if (isSpecialBlueReturn) currentTheme.returnKeyText else currentTheme.textPrimary
-                textPaint.textSize = (if (displayLabel.length > 4) 14f else 15.5f) * density
-                textPaint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
-                drawCenteredText(canvas, displayLabel, bounds, textPaint)
+                if (displayLabel.lowercase() == "return" || displayLabel == "↵") {
+                    textPaint.textSize = 21f * density
+                    textPaint.typeface = android.graphics.Typeface.DEFAULT
+                    drawCenteredText(canvas, "↵", bounds, textPaint)
+                } else {
+                    textPaint.textSize = (if (displayLabel.length > 4) 14f else 15.5f) * density
+                    textPaint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                    drawCenteredText(canvas, displayLabel, bounds, textPaint)
+                }
             }
             KeyType.SPACE -> {
                 textPaint.color = currentTheme.textSecondary
                 textPaint.textSize = 14f * density
                 textPaint.typeface = android.graphics.Typeface.DEFAULT
-                val spaceText = if (isTrackpadMode) "" else (if (layout?.language == LanguageLayout.QWERTY) "space" else layout?.language?.displayName ?: "space")
+                val spaceText = if (isTrackpadMode) "" else when (layout?.language) {
+                    LanguageLayout.QWERTY -> "space"
+                    LanguageLayout.SPANISH -> "espacio"
+                    LanguageLayout.AZERTY -> "espace"
+                    LanguageLayout.QWERTZ -> "Leerzeichen"
+                    else -> layout?.language?.displayName ?: "space"
+                }
                 drawCenteredText(canvas, spaceText, bounds, textPaint)
+
+                // If not standard QWERTY, draw a subtle badge in bottom-right corner of spacebar
+                if (layout?.language != LanguageLayout.QWERTY && !isTrackpadMode) {
+                    val badge = when (layout?.language) {
+                        LanguageLayout.SPANISH -> "ES"
+                        LanguageLayout.AZERTY -> "FR"
+                        LanguageLayout.QWERTZ -> "DE"
+                        LanguageLayout.CYRILLIC -> "RU"
+                        LanguageLayout.ARABIC -> "AR"
+                        else -> ""
+                    }
+                    if (badge.isNotEmpty()) {
+                        secondaryTextPaint.color = currentTheme.textSecondary
+                        secondaryTextPaint.textSize = 9.5f * density
+                        secondaryTextPaint.typeface = android.graphics.Typeface.DEFAULT_BOLD
+                        canvas.drawText(badge, bounds.right - (12f * density), bounds.bottom - (4.5f * density), secondaryTextPaint)
+                    }
+                }
             }
             KeyType.SWITCH_NUMERIC, KeyType.SWITCH_ALPHA, KeyType.SWITCH_SYMBOL -> {
                 textPaint.color = currentTheme.textPrimary
@@ -479,7 +531,33 @@ class IOSKeyboardView @JvmOverloads constructor(
             KeyType.RETURN, KeyType.SPACE -> SoundType.RETURN_SPACE
             else -> SoundType.STANDARD
         }
-        audioHapticFeedback?.playKeystrokeSound(soundType, preferences.soundEnabled, preferences.soundVolume)
-        audioHapticFeedback?.performHapticFeedback(soundType, preferences.hapticsEnabled, preferences.hapticsIntensity)
+        audioHapticFeedback?.playKeystrokeSound(soundType, preferences.soundEnabled, preferences.soundVolume, this)
+        audioHapticFeedback?.performHapticFeedback(soundType, preferences.hapticsEnabled, preferences.hapticsIntensity, this)
+    }
+
+    fun showLanguageContextMenu() {
+        val l = layout ?: return
+        val density = resources.displayMetrics.density
+        val anchorX = if (!l.globeButtonBounds.isEmpty) l.globeButtonBounds.centerX() else (30f * density)
+        val anchorY = if (!l.globeButtonBounds.isEmpty) l.globeButtonBounds.top else (height - (50f * density))
+        IOSContextMenu(
+            context = context,
+            currentTheme = currentTheme,
+            activeLanguage = l.language,
+            currentOneHandedMode = l.oneHandedMode,
+            onLanguageSelected = { lang -> actionListener?.onLanguageSelected(lang) },
+            onEmojiSelected = { actionListener?.onEmojiPickerRequested() },
+            onSettingsSelected = {
+                try {
+                    val intent = Intent(context, SettingsActivity::class.java).apply {
+                        flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                    }
+                    context.startActivity(intent)
+                } catch (e: Exception) {
+                    // Ignore
+                }
+            },
+            onOneHandedSelected = { mode -> actionListener?.onOneHandedModeChange(mode) }
+        ).show(this, anchorX, anchorY)
     }
 }

@@ -93,13 +93,15 @@ class DictionaryEngine(private val context: Context) {
 
         val isExact = trie.contains(lowerInput)
 
+        val isAutocorrectViable = !isExact && autocorrectEnabled && rawInput.length >= 2
+
         // 1. Prefix matches
         val prefixMatches = trie.findPrefixSuggestions(lowerInput, limit = 5)
 
         // 2. Fuzzy matches if no prefix matches or not exact and autocorrect enabled
         val candidates = if (prefixMatches.isNotEmpty()) {
             prefixMatches.map { it.first }
-        } else if (autocorrectEnabled) {
+        } else if (isAutocorrectViable) {
             trie.searchFuzzy(lowerInput, maxCost = 2, limit = 5).map { it.first }
         } else {
             emptyList()
@@ -127,9 +129,9 @@ class DictionaryEngine(private val context: Context) {
             rightCandidate = formattedCandidates.getOrNull(1)?.takeIf { !it.equals(rawInput, ignoreCase = true) && !it.equals(leftCandidate, ignoreCase = true) }
                 ?: formattedCandidates.getOrNull(2) ?: ""
         } else {
-            // Autocorrect kicks in for center candidate if autocorrect is enabled
+            // Autocorrect kicks in for center candidate if autocorrect is enabled and viable
             val topSuggested = formattedCandidates.firstOrNull()
-            if (autocorrectEnabled && topSuggested != null) {
+            if (isAutocorrectViable && topSuggested != null) {
                 centerCandidate = topSuggested
                 leftCandidate = rawInput // Left column shows verbatim what user typed in iOS
                 rightCandidate = formattedCandidates.getOrNull(1) ?: ""

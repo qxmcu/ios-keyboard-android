@@ -109,18 +109,12 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         suggestionStripView = SuggestionStripView(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
-                (42 * density).toInt()
+                (44 * density).toInt()
             )
             onCandidateSelected = { candidate -> commitCandidate(candidate) }
             onQuickPasteSelected = { pasteText ->
                 currentInputConnection?.commitText(pasteText, 1)
                 showQuickPaste(null)
-            }
-            onTranslateClicked = { toggleTranslationBar() }
-            onClipboardClicked = { showClipboardDrawer() }
-            onUndoClicked = {
-                currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_DOWN, KeyEvent.KEYCODE_Z))
-                currentInputConnection?.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_Z))
             }
         }
         rootLayout?.addView(suggestionStripView)
@@ -186,6 +180,13 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             }
             onBackToAlphaClicked = {
                 showMainKeyboard()
+            }
+            onGlobeClicked = {
+                showMainKeyboard()
+                keyboardView?.showLanguageContextMenu()
+            }
+            onDictationClicked = {
+                onKey(KeyDefinition(code = -11, label = "🎙", keyType = KeyType.DICTATION, weight = 1.0f))
             }
         }
         contentContainer?.addView(emojiPickerView)
@@ -487,11 +488,18 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     }
 
     override fun onLanguageSwitch() {
-        val entries = LanguageLayout.entries
-        val nextIdx = (entries.indexOf(currentLanguage) + 1) % entries.size
-        currentLanguage = entries[nextIdx]
+        keyboardView?.showLanguageContextMenu()
+    }
+
+    override fun onLanguageSelected(language: LanguageLayout) {
+        currentLanguage = language
         preferences.activeLanguage = currentLanguage
         dictionaryEngine.setLanguage(currentLanguage)
+        updateKeyboardLayout()
+    }
+
+    override fun onOneHandedModeChange(oneHandedMode: OneHandedMode) {
+        this.oneHandedMode = oneHandedMode
         updateKeyboardLayout()
     }
 

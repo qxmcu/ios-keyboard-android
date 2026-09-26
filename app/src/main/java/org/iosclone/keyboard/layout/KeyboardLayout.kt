@@ -19,6 +19,12 @@ class KeyboardLayout(
     // Action button bounds for one-handed docking sidebar
     val oneHandedSideButtonBounds: RectF = RectF()
 
+    // Floating bottom inset buttons (Globe & Dictation)
+    val globeButtonBounds: RectF = RectF()
+    val dictationButtonBounds: RectF = RectF()
+    val globeKeyDefinition = KeyDefinition(code = -10, label = "🌐", keyType = KeyType.GLOBE, weight = 1.0f)
+    val dictationKeyDefinition = KeyDefinition(code = -11, label = "🎙", keyType = KeyType.DICTATION, weight = 1.0f)
+
     /**
      * Dynamically calculates bounds and touch targets for each key across all rows
      * with authentic iOS proportions and alignment.
@@ -157,6 +163,32 @@ class KeyboardLayout(
 
             currentY += rowHeight + verticalRowGap
         }
+
+        // Measure floating bottom bar buttons (Globe on left, Dictation on right)
+        val bottomInsetArea = bottomPadding.coerceAtLeast(36f * density)
+        val iconTouchW = 48f * density
+        val iconTouchH = 40f * density
+        val bottomIconCenterY = viewHeight - (bottomInsetArea / 2f)
+
+        val globeCenterX = startXOffset + outerHorizontalMargin + (22f * density)
+        globeButtonBounds.set(
+            globeCenterX - (iconTouchW / 2f),
+            bottomIconCenterY - (iconTouchH / 2f),
+            globeCenterX + (iconTouchW / 2f),
+            bottomIconCenterY + (iconTouchH / 2f)
+        )
+        globeKeyDefinition.bounds.set(globeButtonBounds)
+        globeKeyDefinition.touchBounds.set(globeButtonBounds)
+
+        val dictationCenterX = (startXOffset + effectiveWidth) - outerHorizontalMargin - (22f * density)
+        dictationButtonBounds.set(
+            dictationCenterX - (iconTouchW / 2f),
+            bottomIconCenterY - (iconTouchH / 2f),
+            dictationCenterX + (iconTouchW / 2f),
+            bottomIconCenterY + (iconTouchH / 2f)
+        )
+        dictationKeyDefinition.bounds.set(dictationButtonBounds)
+        dictationKeyDefinition.touchBounds.set(dictationButtonBounds)
     }
 
     private fun measureBottomRow(
@@ -180,9 +212,10 @@ class KeyboardLayout(
         for (key in row) {
             when (key.keyType) {
                 KeyType.SWITCH_NUMERIC, KeyType.SWITCH_ALPHA -> keyWidthMap[key] = (baseKeyWidth * 1.35f)
-                KeyType.GLOBE -> keyWidthMap[key] = (baseKeyWidth * 1.05f)
-                KeyType.DICTATION -> keyWidthMap[key] = (baseKeyWidth * 0.95f)
-                KeyType.RETURN -> keyWidthMap[key] = (baseKeyWidth * 2.05f)
+                KeyType.EMOJI -> keyWidthMap[key] = (baseKeyWidth * 1.15f)
+                KeyType.GLOBE -> keyWidthMap[key] = (baseKeyWidth * 1.15f)
+                KeyType.DICTATION -> keyWidthMap[key] = (baseKeyWidth * 1.0f)
+                KeyType.RETURN -> keyWidthMap[key] = (baseKeyWidth * 1.85f)
                 KeyType.SPACE -> {} // Computed dynamically
                 else -> keyWidthMap[key] = (baseKeyWidth * 1.0f)
             }
@@ -190,7 +223,8 @@ class KeyboardLayout(
 
         val totalGaps = (row.size - 1) * horizontalKeyGap
         val otherKeysWidth = keyWidthMap.values.sum()
-        val calculatedSpaceWidth = (totalRowWidth - otherKeysWidth - totalGaps).coerceAtLeast(baseKeyWidth * 2.5f)
+        val availableForSpace = totalRowWidth - otherKeysWidth - totalGaps
+        val calculatedSpaceWidth = availableForSpace.coerceAtLeast(baseKeyWidth * 2.5f)
         keyWidthMap[spaceKey] = calculatedSpaceWidth
 
         var currentX = startX
@@ -240,6 +274,12 @@ class KeyboardLayout(
     }
 
     fun findKeyAt(x: Float, y: Float): KeyDefinition? {
+        if (globeButtonBounds.contains(x, y)) {
+            return globeKeyDefinition
+        }
+        if (dictationButtonBounds.contains(x, y)) {
+            return dictationKeyDefinition
+        }
         for (row in rows) {
             for (key in row) {
                 if (key.touchBounds.contains(x, y)) {
