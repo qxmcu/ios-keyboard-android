@@ -35,6 +35,7 @@ class ClipboardDrawerView @JvmOverloads constructor(
 
     init {
         orientation = VERTICAL
+        setBackgroundColor(Color.TRANSPARENT)
         val density = resources.displayMetrics.density
 
         // 1. Top Action Header
@@ -188,7 +189,7 @@ class ClipboardDrawerView @JvmOverloads constructor(
 
     fun applyTheme(theme: ThemeColors) {
         currentTheme = theme
-        setBackgroundColor(theme.keyboardBackground)
+        setBackgroundColor(Color.TRANSPARENT)
         headerTitle.setTextColor(theme.textPrimary)
         closeBtn.setTextColor(theme.accentBlue)
         clearAllBtn.setTextColor(theme.accentBlue)

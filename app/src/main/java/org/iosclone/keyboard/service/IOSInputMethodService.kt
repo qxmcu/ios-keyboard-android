@@ -3,11 +3,20 @@ package org.iosclone.keyboard.service
 import android.content.Context
 import android.content.Intent
 import android.inputmethodservice.InputMethodService
+import android.graphics.Color
+import android.graphics.Outline
+import android.graphics.PixelFormat
+import android.graphics.drawable.ColorDrawable
+import android.graphics.drawable.GradientDrawable
+import android.os.Build
 import android.os.Handler
 import android.os.Looper
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewOutlineProvider
+import android.view.Window
+import android.view.WindowManager
 import android.view.inputmethod.EditorInfo
 import android.view.inputmethod.InputConnection
 import android.widget.FrameLayout
@@ -142,7 +151,29 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         }
     }
 
+    override fun onConfigureWindow(win: Window, isFullscreen: Boolean, isCandidatesOnly: Boolean) {
+        super.onConfigureWindow(win, isFullscreen, isCandidatesOnly)
+        configureWindowTranslucency(win)
+    }
+
+    private fun configureWindowTranslucency(win: Window?) {
+        if (win == null) return
+        win.setFormat(PixelFormat.TRANSLUCENT)
+        win.setBackgroundDrawable(ColorDrawable(Color.TRANSPARENT))
+        win.decorView.setBackgroundColor(Color.TRANSPARENT)
+        win.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+            win.addFlags(WindowManager.LayoutParams.FLAG_BLUR_BEHIND)
+            try {
+                win.attributes = win.attributes.apply {
+                    blurBehindRadius = 60
+                }
+            } catch (_: Throwable) {}
+        }
+    }
+
     override fun onCreateInputView(): View {
+        configureWindowTranslucency(window?.window)
         currentTheme = themeResolver.resolveTheme(preferences.themeMode)
 
         val density = resources.displayMetrics.density
@@ -152,7 +183,6 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
             )
-            setBackgroundColor(currentTheme.keyboardBackground)
         }
 
         // 1. Suggestion Strip
@@ -407,7 +437,27 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     }
 
     private fun applyCurrentTheme() {
-        rootLayout?.setBackgroundColor(currentTheme.keyboardBackground)
+        val density = resources.displayMetrics.density
+        val topRadius = 24f * density
+        val radii = floatArrayOf(
+            topRadius, topRadius, // top-left
+            topRadius, topRadius, // top-right
+            0f, 0f,               // bottom-right
+            0f, 0f                // bottom-left
+        )
+        rootLayout?.background = GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadii = radii
+            setColor(currentTheme.keyboardBackground)
+            setStroke((1f * density).toInt().coerceAtLeast(1), currentTheme.keyboardGlassStroke)
+        }
+        rootLayout?.outlineProvider = object : ViewOutlineProvider() {
+            override fun getOutline(view: View, outline: Outline) {
+                outline.setRoundRect(0, 0, view.width, view.height + (topRadius * 2).toInt(), topRadius)
+            }
+        }
+        rootLayout?.clipToOutline = true
+
         keyboardView?.applyTheme(currentTheme)
         suggestionStripView?.applyTheme(currentTheme)
         translationBarView?.applyTheme(currentTheme)

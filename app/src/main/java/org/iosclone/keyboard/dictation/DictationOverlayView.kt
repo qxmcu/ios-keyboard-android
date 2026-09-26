@@ -74,9 +74,9 @@ class DictationOverlayView @JvmOverloads constructor(
         currentTheme = theme
         val density = resources.displayMetrics.density
         background = GradientDrawable().apply {
-            setColor(if (theme.isDark) Color.parseColor("#E6242426") else Color.parseColor("#F5F6F8"))
+            setColor(theme.keyboardBackground)
             cornerRadius = 14f * density
-            setStroke((1 * density).toInt(), if (theme.isDark) 0x33FFFFFF else 0x1F000000)
+            setStroke((1 * density).toInt().coerceAtLeast(1), theme.keyboardGlassStroke)
         }
         statusTv.setTextColor(theme.textPrimary)
         waveView.setWaveColor(theme.accentBlue)

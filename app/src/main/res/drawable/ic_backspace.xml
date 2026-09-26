@@ -3,7 +3,18 @@
     android:height="24dp"
     android:viewportWidth="24"
     android:viewportHeight="24">
+  <!-- Authentic Apple iOS Outline Backspace Key Symbol -->
   <path
-      android:fillColor="#FF000000"
-      android:pathData="M22,3H7c-0.69,0 -1.23,0.35 -1.59,0.88L0,12l5.41,8.11c0.36,0.53 0.9,0.89 1.59,0.89h15c1.1,0 2,-0.9 2,-2V5C24,3.9 23.1,3 22,3zM19,15.59L17.59,17 14,13.41 10.41,17 9,15.59 12.59,12 9,8.41 10.41,7 14,10.59 17.59,7 19,8.41 15.41,12 19,15.59z"/>
+      android:strokeColor="#FF000000"
+      android:strokeWidth="1.7"
+      android:strokeLineCap="round"
+      android:strokeLineJoin="round"
+      android:fillColor="#00000000"
+      android:pathData="M20,5.5 H8.2 C7.55,5.5 6.95,5.85 6.6,6.4 L2.3,12 L6.6,17.6 C6.95,18.15 7.55,18.5 8.2,18.5 H20 C21.1,18.5 22,17.6 22,16.5 V7.5 C22,6.4 21.1,5.5 20,5.5 Z"/>
+  <path
+      android:strokeColor="#FF000000"
+      android:strokeWidth="1.7"
+      android:strokeLineCap="round"
+      android:fillColor="#00000000"
+      android:pathData="M11.5,9.5 L16.5,14.5 M16.5,9.5 L11.5,14.5"/>
 </vector>

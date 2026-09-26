@@ -162,21 +162,27 @@ class SuggestionStripView @JvmOverloads constructor(
 
     fun applyTheme(theme: ThemeColors) {
         currentTheme = theme
-        setBackgroundColor(theme.suggestionStripBackground)
+        setBackgroundColor(Color.TRANSPARENT)
 
         leftCandidateTv.setTextColor(theme.suggestionStripText)
         centerCandidateTv.setTextColor(theme.suggestionStripText)
         rightCandidateTv.setTextColor(theme.suggestionStripText)
 
         quickPasteTv.setTextColor(theme.suggestionStripText)
-        quickPasteIcon.setColorFilter(theme.accentBlue)
+        quickPasteIcon.setColorFilter(theme.suggestionStripText)
+
+        val density = resources.displayMetrics.density
+        quickPasteContainer.background = GradientDrawable().apply {
+            setColor(if (theme.isDark) 0x33FFFFFF else 0x26000000)
+            cornerRadius = 14f * density
+            setStroke((1f * density).toInt().coerceAtLeast(1), if (theme.isDark) 0x22FFFFFF else 0x14000000)
+        }
 
         val sepColor = if (theme.isDark) 0x2AFFFFFF else 0x1A000000
         sep1.setBackgroundColor(sepColor)
         sep2.setBackgroundColor(sepColor)
-        dividerPaint.color = if (theme.isDark) 0x2EFFFFFF.toInt() else 0x1F000000
+        dividerPaint.color = Color.TRANSPARENT
 
-        val density = resources.displayMetrics.density
         writingToolsBtn.background = GradientDrawable().apply {
             setColor(if (theme.isDark) 0x22FFFFFF else 0x14000000)
             cornerRadius = 16f * density
@@ -252,7 +258,5 @@ class SuggestionStripView @JvmOverloads constructor(
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
-        val y = height.toFloat() - 1f
-        canvas.drawLine(0f, y, width.toFloat(), y, dividerPaint)
     }
 }

@@ -51,8 +51,8 @@ class KeyboardLayout(
         val topPadding = 6f * density
         val verticalRowGap = 10f * density
 
-        // Dedicated floating bottom bar height (sits ABOVE system navigation bar)
-        val floatingBarHeight = 38f * density
+        // Dedicated floating bottom bar height (sits cleanly ABOVE system navigation bar)
+        val floatingBarHeight = 42f * density
         val bottomPadding = bottomInset + floatingBarHeight + (6f * density)
 
         val numRows = rows.size
@@ -181,8 +181,8 @@ class KeyboardLayout(
 
         // Measure floating bottom bar buttons (Globe on left, Dictation on right)
         // Positioned cleanly in the floating bar ABOVE the system navigation bar
-        val iconTouchW = 48f * density
-        val iconTouchH = 40f * density
+        val iconTouchW = 44f * density
+        val iconTouchH = 38f * density
         val bottomIconCenterY = viewHeight - bottomInset - (floatingBarHeight / 2f)
 
         val globeCenterX = startXOffset + outerHorizontalMargin + (22f * density)

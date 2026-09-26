@@ -81,6 +81,9 @@ class IOSKeyboardView @JvmOverloads constructor(
     private val secondaryTextPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
         textAlign = Paint.Align.CENTER
     }
+    private val keyStrokePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
+        style = Paint.Style.STROKE
+    }
     private val trackpadOverlayPaint = Paint(Paint.ANTI_ALIAS_FLAG)
 
     // Vector drawable cache
@@ -128,13 +131,14 @@ class IOSKeyboardView @JvmOverloads constructor(
     init {
         isFocusable = true
         isFocusableInTouchMode = true
+        setBackgroundColor(android.graphics.Color.TRANSPARENT)
         loadIcons()
     }
 
     private fun loadIcons() {
         val names = listOf(
             "ic_shift", "ic_shift_caps", "ic_backspace", "ic_globe",
-            "ic_dictation", "ic_emoji", "ic_onehand_left", "ic_onehand_right"
+            "ic_dictation", "ic_emoji", "ic_return", "ic_onehand_left", "ic_onehand_right"
         )
         for (name in names) {
             val id = context.resources.getIdentifier(name, "drawable", context.packageName)
@@ -165,7 +169,7 @@ class IOSKeyboardView @JvmOverloads constructor(
 
         val verticalRowGap = if (isLandscape) (6f * density) else (10f * density)
         val topPadding = 6f * density
-        val floatingBarHeight = if (isLandscape) 0f else (38f * density)
+        val floatingBarHeight = if (isLandscape) 0f else (42f * density)
         val totalKeysHeight = (targetRowHeight * 4) + (verticalRowGap * 3) + topPadding + (6f * density)
 
         val baseHeight = (totalKeysHeight * preferences.keyboardHeightFactor) + floatingBarHeight + bottomInset
@@ -186,12 +190,9 @@ class IOSKeyboardView @JvmOverloads constructor(
         val l = layout ?: return
         val density = resources.displayMetrics.density
 
-        // 1. Keyboard Canvas Background
-        canvas.drawColor(currentTheme.keyboardBackground)
-
-        // 2. Keys Rendering
-        val keyCornerRadius = 5f * density
-        val shadowOffset = 1.2f * density
+        // 1. Keys Rendering (Root container renders translucent blur backdrop)
+        val keyCornerRadius = 8.5f * density
+        val shadowOffset = 1.35f * density
 
         for (row in l.rows) {
             for (key in row) {
@@ -200,40 +201,41 @@ class IOSKeyboardView @JvmOverloads constructor(
             }
         }
 
-        // 3. Floating bottom bar buttons (Globe on left, Dictation on right)
+        // 2. Floating bottom bar buttons (Globe on left, Dictation on right)
+        val bottomIconTint = if (currentTheme.isDark) android.graphics.Color.parseColor("#AEAEB2") else android.graphics.Color.parseColor("#48484A")
         if (!l.globeButtonBounds.isEmpty) {
             val pressedGlobe = (pressedKey == l.globeKeyDefinition)
-            val globeTint = if (pressedGlobe) currentTheme.accentBlue else currentTheme.textPrimary
-            drawKeyIcon(canvas, "ic_globe", l.globeButtonBounds, globeTint, density)
+            val globeTint = if (pressedGlobe) currentTheme.accentBlue else bottomIconTint
+            drawKeyIcon(canvas, "ic_globe", l.globeButtonBounds, globeTint, density, iconSizeDp = 22.5f)
         }
         if (!l.dictationButtonBounds.isEmpty) {
             val pressedDict = (pressedKey == l.dictationKeyDefinition)
-            val dictTint = if (pressedDict) currentTheme.accentBlue else currentTheme.textPrimary
-            drawKeyIcon(canvas, "ic_dictation", l.dictationButtonBounds, dictTint, density)
+            val dictTint = if (pressedDict) currentTheme.accentBlue else bottomIconTint
+            drawKeyIcon(canvas, "ic_dictation", l.dictationButtonBounds, dictTint, density, iconSizeDp = 22.5f)
         }
 
-        // 4. One-handed docking sidebar button
+        // 3. One-handed docking sidebar button
         if (l.oneHandedMode != OneHandedMode.NORMAL && !l.oneHandedSideButtonBounds.isEmpty) {
             drawOneHandedSidebar(canvas, l, density)
         }
 
-        // 5. Trackpad Mode Overlay
+        // 4. Trackpad Mode Overlay
         if (isTrackpadMode) {
             trackpadOverlayPaint.color = currentTheme.trackpadHighlightColor
             canvas.drawRect(0f, 0f, width.toFloat(), height.toFloat(), trackpadOverlayPaint)
         }
 
-        // 6. Glide Typing Trail
+        // 5. Glide Typing Trail
         if (isGliding && preferences.gestureTypingEnabled) {
             gestureTrailRenderer.draw(canvas, currentTheme.gestureTrailColor, 8f * density)
         }
 
-        // 7. Long-press accent popover
+        // 6. Long-press accent popover
         val currentPressed = pressedKey
         if (currentPressed != null && currentPressed.accents.isNotEmpty() && !isGliding && !isTrackpadMode) {
             longPressPopup.draw(canvas, currentPressed, width.toFloat(), currentTheme, density)
         } else if (currentPressed != null && preferences.keyPopupsEnabled && !isGliding && !isTrackpadMode) {
-            // 8. Key Magnifier Popup Bubble
+            // 7. Key Magnifier Popup Bubble
             magnifierPopup.draw(canvas, currentPressed, currentTheme, density)
         }
     }
@@ -272,6 +274,14 @@ class IOSKeyboardView @JvmOverloads constructor(
         keyBgPaint.alpha = (255 * alphaMultiplier).toInt()
         canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, keyBgPaint)
 
+        // Specular highlight rim on glass pebble keys
+        if (!isSpecialBlueReturn) {
+            keyStrokePaint.strokeWidth = 0.6f * density
+            keyStrokePaint.color = currentTheme.keyboardGlassStroke
+            keyStrokePaint.alpha = (255 * alphaMultiplier).toInt()
+            canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, keyStrokePaint)
+        }
+
         // Key Content (Icon or Label)
         when (key.keyType) {
             KeyType.SHIFT -> {
@@ -294,45 +304,35 @@ class IOSKeyboardView @JvmOverloads constructor(
             KeyType.RETURN -> {
                 val displayLabel = layout?.returnKeyLabel ?: "return"
                 textPaint.color = if (isSpecialBlueReturn) currentTheme.returnKeyText else currentTheme.textPrimary
-                if (displayLabel.lowercase() == "return" || displayLabel == "↵") {
-                    textPaint.textSize = 21f * density
-                    textPaint.typeface = android.graphics.Typeface.DEFAULT
-                    drawCenteredText(canvas, "↵", bounds, textPaint)
-                } else {
+                if (isSpecialBlueReturn || (displayLabel.lowercase() != "return" && displayLabel != "↵")) {
                     textPaint.textSize = (if (displayLabel.length > 4) 14f else 15.5f) * density
                     textPaint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
                     drawCenteredText(canvas, displayLabel, bounds, textPaint)
+                } else {
+                    drawKeyIcon(canvas, "ic_return", bounds, currentTheme.textPrimary, density, iconSizeDp = 20f)
                 }
             }
             KeyType.SPACE -> {
-                textPaint.color = currentTheme.textSecondary
-                textPaint.textSize = 14f * density
-                textPaint.typeface = android.graphics.Typeface.DEFAULT
-                val spaceText = if (isTrackpadMode) "" else when (layout?.language) {
-                    LanguageLayout.QWERTY -> "space"
-                    LanguageLayout.SPANISH -> "espacio"
-                    LanguageLayout.AZERTY -> "espace"
-                    LanguageLayout.QWERTZ -> "Leerzeichen"
-                    else -> layout?.language?.displayName ?: "space"
-                }
-                drawCenteredText(canvas, spaceText, bounds, textPaint)
-
-                // If not standard QWERTY, draw a subtle badge in bottom-right corner of spacebar
-                if (layout?.language != LanguageLayout.QWERTY && !isTrackpadMode) {
+                // Spacebar has clean surface (no center text) matching iOS 27 Liquid Glass
+                if (!isTrackpadMode) {
                     val badge = when (layout?.language) {
+                        LanguageLayout.QWERTY -> "EN"
                         LanguageLayout.SPANISH -> "ES"
                         LanguageLayout.AZERTY -> "FR"
                         LanguageLayout.QWERTZ -> "DE"
                         LanguageLayout.CYRILLIC -> "RU"
                         LanguageLayout.ARABIC -> "AR"
-                        else -> ""
+                        LanguageLayout.HINDI -> "HI"
+                        LanguageLayout.CHINESE_PINYIN -> "拼"
+                        LanguageLayout.JAPANESE -> "日"
+                        LanguageLayout.KOREAN -> "한"
+                        LanguageLayout.THAI -> "ไทย"
+                        else -> "EN"
                     }
-                    if (badge.isNotEmpty()) {
-                        secondaryTextPaint.color = currentTheme.textSecondary
-                        secondaryTextPaint.textSize = 9.5f * density
-                        secondaryTextPaint.typeface = android.graphics.Typeface.DEFAULT_BOLD
-                        canvas.drawText(badge, bounds.right - (12f * density), bounds.bottom - (4.5f * density), secondaryTextPaint)
-                    }
+                    secondaryTextPaint.color = currentTheme.textSecondary
+                    secondaryTextPaint.textSize = 9.5f * density
+                    secondaryTextPaint.typeface = android.graphics.Typeface.create("sans-serif-medium", android.graphics.Typeface.NORMAL)
+                    canvas.drawText(badge, bounds.right - (12f * density), bounds.bottom - (5.5f * density), secondaryTextPaint)
                 }
             }
             KeyType.SWITCH_NUMERIC, KeyType.SWITCH_ALPHA, KeyType.SWITCH_SYMBOL -> {
@@ -356,9 +356,9 @@ class IOSKeyboardView @JvmOverloads constructor(
         canvas.drawText(text, bounds.centerX(), y, paint)
     }
 
-    private fun drawKeyIcon(canvas: Canvas, iconName: String, bounds: RectF, tintColor: Int, density: Float) {
+    private fun drawKeyIcon(canvas: Canvas, iconName: String, bounds: RectF, tintColor: Int, density: Float, iconSizeDp: Float = 20f) {
         val drawable = iconCache[iconName] ?: return
-        val iconSize = (20f * density).toInt()
+        val iconSize = (iconSizeDp * density).toInt()
         val left = (bounds.centerX() - iconSize / 2f).toInt()
         val top = (bounds.centerY() - iconSize / 2f).toInt()
         drawable.setBounds(left, top, left + iconSize, top + iconSize)
