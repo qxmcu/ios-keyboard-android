@@ -27,6 +27,7 @@ class DictationOverlayView @JvmOverloads constructor(
     private var currentTheme: ThemeColors = ThemeColors.Light
 
     var onDoneClicked: (() -> Unit)? = null
+    var onRetryClicked: (() -> Unit)? = null
 
     init {
         orientation = HORIZONTAL
@@ -43,6 +44,7 @@ class DictationOverlayView @JvmOverloads constructor(
             layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
                 marginEnd = (12 * density).toInt()
             }
+            setOnClickListener { onRetryClicked?.invoke() }
         }
         addView(statusTv)
 
@@ -64,6 +66,10 @@ class DictationOverlayView @JvmOverloads constructor(
             setOnClickListener { onDoneClicked?.invoke() }
         }
         addView(doneBtn)
+    }
+
+    fun setStatus(text: String) {
+        statusTv.text = text
     }
 
     fun setAudioLevel(rmsDb: Float) {

@@ -8,7 +8,7 @@
     <!-- Microphone permission for voice dictation -->
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
 
-    <!-- Android 11+ Package Visibility Queries for zFont 3 Integration -->
+    <!-- Android 11+ Package Visibility Queries for zFont 3 & SpeechRecognizer RecognitionService -->
     <queries>
         <package android:name="com.mgng.zfont3" />
         <intent>
@@ -18,6 +18,9 @@
         <intent>
             <action android:name="android.intent.action.VIEW" />
             <data android:mimeType="application/x-font-ttf" />
+        </intent>
+        <intent>
+            <action android:name="android.speech.RecognitionService" />
         </intent>
     </queries>
 
@@ -54,6 +57,12 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+
+        <!-- Transparent Activity for Dictation Audio Permission Request -->
+        <activity
+            android:name=".dictation.DictationPermissionActivity"
+            android:theme="@android:style/Theme.Translucent.NoTitleBar"
+            android:exported="false" />
 
         <!-- FileProvider for iOS Emoji Sticker & Font Export -->
         <provider

@@ -1,22 +1,40 @@
 package org.iosclone.keyboard.dictation
 
+import android.Manifest
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
+import android.os.Handler
+import android.os.Looper
 import android.speech.RecognitionListener
 import android.speech.RecognizerIntent
 import android.speech.SpeechRecognizer
 import android.util.Log
+import androidx.core.content.ContextCompat
 
 /**
  * Intelligent iOS 27 Voice Dictation Engine.
- * Supports spoken punctuation, voice emojis, voice editing commands,
- * and audio RMS wave monitoring for Siri-style live dictation animations.
+ * Features continuous listening (doesn't close on speech pauses), spoken punctuation parsing,
+ * voice emojis, voice editing commands, and Siri-style live audio wave RMS monitoring.
  */
 class VoiceDictationEngine(private val context: Context) {
 
     private val tag = "VoiceDictationEngine"
     private var speechRecognizer: SpeechRecognizer? = null
+    private val mainHandler = Handler(Looper.getMainLooper())
+    private var currentLangCode: String = "en-US"
+
+    /**
+     * Whether dictation mode is active from the user's perspective.
+     * The UI stays open and restarts recognition segments continuously until the user taps Done.
+     */
+    var isDictationActive = false
+        private set
+
+    /**
+     * Whether the Android SpeechRecognizer is actively recording an utterance.
+     */
     var isListening = false
         private set
 
@@ -24,6 +42,8 @@ class VoiceDictationEngine(private val context: Context) {
     var onCommandRecognized: ((VoiceCommand) -> Unit)? = null
     var onAudioLevelChanged: ((Float) -> Unit)? = null
     var onDictationStateChanged: ((Boolean) -> Unit)? = null
+    var onStatusChanged: ((String) -> Unit)? = null
+    var onPermissionNeeded: (() -> Unit)? = null
 
     enum class VoiceCommand {
         DELETE_LAST_WORD,
@@ -65,87 +85,179 @@ class VoiceDictationEngine(private val context: Context) {
         "rocket emoji" to "🚀"
     )
 
-    fun startListening(languageCode: String = "en-US") {
-        if (isListening) return
+    /**
+     * Checks if the app has runtime RECORD_AUDIO permission.
+     */
+    fun hasAudioPermission(): Boolean {
+        return ContextCompat.checkSelfPermission(
+            context,
+            Manifest.permission.RECORD_AUDIO
+        ) == PackageManager.PERMISSION_GRANTED
+    }
 
-        if (!SpeechRecognizer.isRecognitionAvailable(context)) {
-            Log.w(tag, "Speech recognition not available on device")
+    /**
+     * Starts continuous voice dictation session.
+     */
+    fun startListening(languageCode: String = "en-US") {
+        currentLangCode = languageCode
+
+        if (!hasAudioPermission()) {
+            isDictationActive = false
+            onPermissionNeeded?.invoke()
             return
         }
 
+        isDictationActive = true
+        mainHandler.post {
+            startListeningInternal()
+        }
+    }
+
+    private fun startListeningInternal() {
+        if (!isDictationActive) return
+
         try {
-            speechRecognizer?.destroy()
-            speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
-                setRecognitionListener(createListener())
+            if (speechRecognizer == null) {
+                speechRecognizer = SpeechRecognizer.createSpeechRecognizer(context).apply {
+                    setRecognitionListener(createListener())
+                }
             }
 
             val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
                 putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM)
-                putExtra(RecognizerIntent.EXTRA_LANGUAGE, languageCode)
+                putExtra(RecognizerIntent.EXTRA_LANGUAGE, currentLangCode)
                 putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, true)
                 putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 3)
-                // Prefer on-device offline recognition when supported
                 putExtra(RecognizerIntent.EXTRA_PREFER_OFFLINE, true)
             }
 
             speechRecognizer?.startListening(intent)
             isListening = true
+            onStatusChanged?.invoke("🎙 Listening…")
             onDictationStateChanged?.invoke(true)
         } catch (e: Exception) {
-            Log.e(tag, "Failed to start speech recognition", e)
+            Log.e(tag, "Failed to start speech recognition: ${e.message}", e)
             isListening = false
-            onDictationStateChanged?.invoke(false)
+            onStatusChanged?.invoke("🎙 Tap to speak")
         }
     }
 
+    /**
+     * Stops dictation session completely.
+     */
     fun stopListening() {
-        if (!isListening) return
+        isDictationActive = false
+        isListening = false
+        mainHandler.removeCallbacksAndMessages(null)
         try {
             speechRecognizer?.stopListening()
-        } catch (e: Exception) {
-            // Ignore
-        }
-        isListening = false
+            speechRecognizer?.cancel()
+        } catch (_: Exception) {}
         onDictationStateChanged?.invoke(false)
     }
 
+    /**
+     * Releases speech resources.
+     */
     fun destroy() {
         stopListening()
-        speechRecognizer?.destroy()
+        try {
+            speechRecognizer?.destroy()
+        } catch (_: Exception) {}
         speechRecognizer = null
     }
 
     private fun createListener() = object : RecognitionListener {
-        override fun onReadyForSpeech(params: Bundle?) {}
-        override fun onBeginningOfSpeech() {}
+        override fun onReadyForSpeech(params: Bundle?) {
+            onStatusChanged?.invoke("🎙 Listening…")
+        }
+
+        override fun onBeginningOfSpeech() {
+            onStatusChanged?.invoke("🎙 Speaking…")
+        }
 
         override fun onRmsChanged(rmsdB: Float) {
             onAudioLevelChanged?.invoke(rmsdB)
         }
 
         override fun onBufferReceived(buffer: ByteArray?) {}
+
         override fun onEndOfSpeech() {
             isListening = false
-            onDictationStateChanged?.invoke(false)
+            onStatusChanged?.invoke("🎙 Processing…")
+            // Do NOT close dictation mode on pause! Keep UI alive and waiting for results
         }
 
         override fun onError(error: Int) {
             isListening = false
-            onDictationStateChanged?.invoke(false)
+            Log.w(tag, "SpeechRecognizer error: $error")
+
+            when (error) {
+                SpeechRecognizer.ERROR_INSUFFICIENT_PERMISSIONS -> {
+                    isDictationActive = false
+                    onStatusChanged?.invoke("Microphone permission needed")
+                    onPermissionNeeded?.invoke()
+                    onDictationStateChanged?.invoke(false)
+                }
+                SpeechRecognizer.ERROR_NO_MATCH, SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> {
+                    // Normal pause or silence: seamlessly restart next listening segment if still in dictation mode
+                    if (isDictationActive) {
+                        onStatusChanged?.invoke("🎙 Listening…")
+                        mainHandler.postDelayed({
+                            if (isDictationActive) {
+                                startListeningInternal()
+                            }
+                        }, 250)
+                    }
+                }
+                SpeechRecognizer.ERROR_RECOGNIZER_BUSY -> {
+                    try { speechRecognizer?.cancel() } catch (_: Exception) {}
+                    if (isDictationActive) {
+                        mainHandler.postDelayed({
+                            if (isDictationActive) {
+                                startListeningInternal()
+                            }
+                        }, 350)
+                    }
+                }
+                else -> {
+                    // For client or audio glitch: retry after brief delay if still active
+                    if (isDictationActive) {
+                        onStatusChanged?.invoke("🎙 Tap to speak")
+                        mainHandler.postDelayed({
+                            if (isDictationActive) {
+                                startListeningInternal()
+                            }
+                        }, 500)
+                    }
+                }
+            }
         }
 
         override fun onResults(results: Bundle?) {
             isListening = false
-            onDictationStateChanged?.invoke(false)
             val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            val text = matches?.firstOrNull() ?: return
-            processDictatedSpeech(text)
+            val text = matches?.firstOrNull()
+            if (!text.isNullOrBlank()) {
+                processDictatedSpeech(text)
+            }
+
+            // Continuous dictation: automatically listen for the next sentence!
+            if (isDictationActive) {
+                mainHandler.postDelayed({
+                    if (isDictationActive) {
+                        startListeningInternal()
+                    }
+                }, 150)
+            }
         }
 
         override fun onPartialResults(partialResults: Bundle?) {
             val matches = partialResults?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
-            val text = matches?.firstOrNull() ?: return
-            // Live partial stream if desired
+            val text = matches?.firstOrNull()
+            if (!text.isNullOrBlank()) {
+                onStatusChanged?.invoke("🎙 $text")
+            }
         }
 
         override fun onEvent(eventType: Int, params: Bundle?) {}

@@ -27,6 +27,7 @@ import org.iosclone.keyboard.audio.AudioHapticFeedback
 import org.iosclone.keyboard.audio.SoundType
 import org.iosclone.keyboard.clipboard.ClipboardManagerHelper
 import org.iosclone.keyboard.dictation.DictationOverlayView
+import org.iosclone.keyboard.dictation.DictationPermissionActivity
 import org.iosclone.keyboard.dictation.VoiceDictationEngine
 import org.iosclone.keyboard.dictionary.DictionaryEngine
 import org.iosclone.keyboard.dictionary.Trie
@@ -135,6 +136,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                     currentInputConnection?.commitText("\n\n", 1)
                 }
                 VoiceDictationEngine.VoiceCommand.STOP -> {
+                    voiceDictationEngine.stopListening()
                     dictationOverlayView?.visibility = View.GONE
                     keyboardView?.visibility = View.VISIBLE
                 }
@@ -143,8 +145,14 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         voiceDictationEngine.onAudioLevelChanged = { rms ->
             dictationOverlayView?.setAudioLevel(rms)
         }
+        voiceDictationEngine.onStatusChanged = { status ->
+            dictationOverlayView?.setStatus(status)
+        }
+        voiceDictationEngine.onPermissionNeeded = {
+            requestAudioPermission()
+        }
         voiceDictationEngine.onDictationStateChanged = { listening ->
-            if (!listening) {
+            if (!listening && !voiceDictationEngine.isDictationActive) {
                 dictationOverlayView?.visibility = View.GONE
                 keyboardView?.visibility = View.VISIBLE
             }
@@ -348,6 +356,13 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 voiceDictationEngine.stopListening()
                 visibility = View.GONE
                 keyboardView?.visibility = View.VISIBLE
+            }
+            onRetryClicked = {
+                if (voiceDictationEngine.hasAudioPermission()) {
+                    startDictationMode()
+                } else {
+                    requestAudioPermission()
+                }
             }
         }
         contentContainer?.addView(dictationOverlayView)
@@ -586,16 +601,16 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             }
 
             KeyType.DICTATION -> {
-                if (voiceDictationEngine.isListening) {
+                if (voiceDictationEngine.isDictationActive) {
                     voiceDictationEngine.stopListening()
                     dictationOverlayView?.visibility = View.GONE
                     keyboardView?.visibility = View.VISIBLE
                 } else {
-                    keyboardView?.visibility = View.GONE
-                    emojiPickerView?.visibility = View.GONE
-                    clipboardDrawerView?.visibility = View.GONE
-                    dictationOverlayView?.visibility = View.VISIBLE
-                    voiceDictationEngine.startListening(currentLanguage.localeCode)
+                    if (!voiceDictationEngine.hasAudioPermission()) {
+                        requestAudioPermission()
+                    } else {
+                        startDictationMode()
+                    }
                 }
             }
 
@@ -776,6 +791,29 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         return text.split(Regex("[^a-zA-Z'0-9]+"))
             .filter { it.isNotBlank() }
             .takeLast(4)
+    }
+
+    private fun requestAudioPermission() {
+        val intent = Intent(this, DictationPermissionActivity::class.java).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        DictationPermissionActivity.onPermissionResult = { granted ->
+            if (granted) {
+                Handler(Looper.getMainLooper()).post {
+                    startDictationMode()
+                }
+            }
+        }
+        startActivity(intent)
+    }
+
+    private fun startDictationMode() {
+        keyboardView?.visibility = View.GONE
+        emojiPickerView?.visibility = View.GONE
+        clipboardDrawerView?.visibility = View.GONE
+        dictationOverlayView?.visibility = View.VISIBLE
+        dictationOverlayView?.setStatus("🎙 Listening…")
+        voiceDictationEngine.startListening(currentLanguage.localeCode)
     }
 
     override fun onDestroy() {
