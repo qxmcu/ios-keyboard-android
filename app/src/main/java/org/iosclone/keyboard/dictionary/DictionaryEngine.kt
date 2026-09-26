@@ -19,6 +19,7 @@ class DictionaryEngine(private val context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val tries = mutableMapOf<LanguageLayout, Trie>()
+    private val symSpells = mutableMapOf<LanguageLayout, SymSpell>()
     private val userDb = UserDictionaryDb(context)
 
     val languageModel = QuantizedLanguageModel(context)
@@ -41,6 +42,7 @@ class DictionaryEngine(private val context: Context) {
     private fun loadLanguage(language: LanguageLayout) {
         scope.launch {
             val trie = Trie()
+            val symSpell = SymSpell()
             val fileName = when (language) {
                 LanguageLayout.QWERTY -> "en_words.txt"
                 LanguageLayout.SPANISH -> "es_words.txt"
@@ -53,12 +55,17 @@ class DictionaryEngine(private val context: Context) {
                 withContext(Dispatchers.IO) {
                     context.assets.open("dictionaries/$fileName").use { inputStream ->
                         BufferedReader(InputStreamReader(inputStream)).useLines { lines ->
+                            var symSpellCount = 0
                             for (line in lines) {
                                 val parts = line.split("\t")
                                 if (parts.isNotEmpty()) {
                                     val word = parts[0].trim()
                                     val freq = if (parts.size > 1) parts[1].toIntOrNull() ?: 10 else 10
                                     trie.insert(word, freq)
+                                    if (symSpellCount < 50000) {
+                                        symSpell.createDictionaryEntry(word, freq.toLong())
+                                        symSpellCount++
+                                    }
                                 }
                             }
                         }
@@ -68,6 +75,7 @@ class DictionaryEngine(private val context: Context) {
                     val userWords = userDb.getAllWordsForLanguage(language.name)
                     for ((word, freq) in userWords) {
                         trie.insert(word, freq)
+                        symSpell.createDictionaryEntry(word, freq.toLong())
                     }
                 }
             } catch (e: Exception) {
@@ -76,6 +84,7 @@ class DictionaryEngine(private val context: Context) {
 
             synchronized(tries) {
                 tries[language] = trie
+                symSpells[language] = symSpell
             }
         }
     }
@@ -89,7 +98,9 @@ class DictionaryEngine(private val context: Context) {
     fun getSuggestions(
         rawInput: String,
         previousWords: List<String> = emptyList(),
-        autocorrectEnabled: Boolean = true
+        autocorrectEnabled: Boolean = true,
+        touchPoints: List<TouchPoint>? = null,
+        keyMatrix: Map<Char, KeyCenter>? = null
     ): AutocorrectResult {
         val prevWord = previousWords.lastOrNull()?.trim()
 
@@ -158,27 +169,33 @@ class DictionaryEngine(private val context: Context) {
 
         val isExact = trie.contains(lowerInput)
 
-        // 4. Prefix matches
+        // 4. Prefix matches from Trie
         val prefixMatches = trie.findPrefixSuggestions(lowerInput, limit = 8)
 
-        // 5. Spatial-distance scored fuzzy candidates
-        val fuzzyMatches = if (!isExact && autocorrectEnabled && rawInput.length >= 2 && !undoManager.isIgnored(rawInput)) {
-            trie.searchFuzzy(lowerInput, maxCost = 2, limit = 8)
-        } else {
-            emptyList()
+        // 5. Symmetric Delete (SymSpell) + Trie Fuzzy matches
+        val symSpell = synchronized(tries) { symSpells[currentLanguage] }
+        val fuzzyCandidates = mutableListOf<Pair<String, Int>>()
+        if (symSpell != null && !isExact && autocorrectEnabled && rawInput.length >= 2 && !undoManager.isIgnored(rawInput)) {
+            val symResults = symSpell.lookup(lowerInput, maxEditDistance = 2, limit = 12)
+            for (item in symResults) {
+                fuzzyCandidates.add(Pair(item.term, item.count.toInt().coerceAtMost(255)))
+            }
+        }
+        if (fuzzyCandidates.isEmpty() && !isExact && autocorrectEnabled && rawInput.length >= 2 && !undoManager.isIgnored(rawInput)) {
+            fuzzyCandidates.addAll(trie.searchFuzzy(lowerInput, maxCost = 2, limit = 8))
         }
 
-        // Combine and score candidates with Language Model + Spatial Proximity
+        // Combine and score candidates with Language Model + Spatial Key Proximity
         data class ScoredCandidate(val word: String, val score: Float)
 
-        val candidatePool = (prefixMatches + fuzzyMatches).distinctBy { it.first }
+        val candidatePool = (prefixMatches + fuzzyCandidates).distinctBy { it.first }
         val scoredList = candidatePool.map { (word, freq) ->
-            val spatialDist = SpatialKeyDistance.spatialDistance(lowerInput, word)
+            val spatialDist = SpatialKeyDistance.spatialDistance(lowerInput, word, touchPoints, keyMatrix)
             val contextScore = languageModel.getContextScore(word, prevWord)
             val isPrefix = word.startsWith(lowerInput)
 
             // Weight calculation:
-            // High frequency + high context boost - spatial penalty
+            // High frequency + high context boost - spatial Euclidean penalty
             var score = (freq * 0.35f) + (contextScore * 0.5f) - (spatialDist * 85f)
             if (isPrefix) score += 60f
             if (word.equals(lowerInput, ignoreCase = true)) score += 500f

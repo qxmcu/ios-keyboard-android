@@ -32,8 +32,8 @@ data class ThemeColors(
         // Authentic iOS 27 Clear Liquid Glass UI (Light Mode)
         val Light = ThemeColors(
             isDark = false,
-            keyboardBackground = Color.parseColor("#D9EDF0F5"), // Frosted luminous liquid glass canvas (richer & lighter)
-            keyboardGlassStroke = Color.parseColor("#80FFFFFF"),// Iridescent top glass rim highlight
+            keyboardBackground = Color.parseColor("#EBF0F3F7"), // Frosted luminous liquid glass canvas (less transparent, lighter)
+            keyboardGlassStroke = Color.TRANSPARENT,            // Zero white outlines
             keyBackground = Color.parseColor("#F5FFFFFF"),      // Luminous rounded white glass pebble
             keyBackgroundPressed = Color.parseColor("#D4CFD4DC"),
             keyShadow = Color.parseColor("#26000000"),          // Soft ambient drop shadow
@@ -56,8 +56,8 @@ data class ThemeColors(
         // Authentic iOS 27 Tinted Liquid Glass UI (Dark Mode)
         val Dark = ThemeColors(
             isDark = true,
-            keyboardBackground = Color.parseColor("#E0141417"), // Rich deep charcoal liquid glass canvas (darker & clearer)
-            keyboardGlassStroke = Color.parseColor("#40FFFFFF"),// Subtle specular highlight on top rim
+            keyboardBackground = Color.parseColor("#EE121215"), // Rich deep charcoal liquid glass canvas (less transparent, darker)
+            keyboardGlassStroke = Color.TRANSPARENT,            // Zero white outlines
             keyBackground = Color.parseColor("#944E4E54"),      // Translucent slate glass pebble
             keyBackgroundPressed = Color.parseColor("#CC5E5E64"),
             keyShadow = Color.parseColor("#4D000000"),          // Dark depth shadow

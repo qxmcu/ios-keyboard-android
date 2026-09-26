@@ -82,6 +82,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     private var currentTheme: ThemeColors = ThemeColors.Light
 
     private val wordBuffer = StringBuilder()
+    private val currentWordTouches = mutableListOf<org.iosclone.keyboard.dictionary.TouchPoint>()
     private var lastShiftPressTime = 0L
     private var lastSpacePressTime = 0L
     private var returnActionId = EditorInfo.IME_ACTION_NONE
@@ -194,6 +195,8 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         val density = resources.displayMetrics.density
 
         val frame = FrameLayout(this).apply {
+            clipChildren = false
+            clipToPadding = false
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -203,6 +206,8 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
 
         rootLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            clipChildren = false
+            clipToPadding = false
             isHapticFeedbackEnabled = true
             isSoundEffectsEnabled = true
             layoutParams = FrameLayout.LayoutParams(
@@ -430,6 +435,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     override fun onStartInput(attribute: EditorInfo?, restarting: Boolean) {
         super.onStartInput(attribute, restarting)
         wordBuffer.clear()
+        currentWordTouches.clear()
         suggestionStripView?.clearSuggestions()
         spellingCalloutView?.dismiss()
     }
@@ -585,7 +591,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             shape = GradientDrawable.RECTANGLE
             cornerRadii = radii
             setColor(currentTheme.keyboardBackground)
-            setStroke((1f * density).toInt().coerceAtLeast(1), currentTheme.keyboardGlassStroke)
+            setStroke(0, Color.TRANSPARENT)
         }
         rootLayout?.outlineProvider = object : ViewOutlineProvider() {
             override fun getOutline(view: View, outline: Outline) {
@@ -665,7 +671,14 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 // Check Autocorrect on space
                 if (preferences.autocorrectEnabled && wordBuffer.isNotEmpty()) {
                     val typed = wordBuffer.toString()
-                    val result = dictionaryEngine.getSuggestions(typed, previousWords, true)
+                    val keyMatrix = keyboardView?.layout?.keyMatrix
+                    val result = dictionaryEngine.getSuggestions(
+                        rawInput = typed,
+                        previousWords = previousWords,
+                        autocorrectEnabled = true,
+                        touchPoints = currentWordTouches,
+                        keyMatrix = keyMatrix
+                    )
                     if (result.isAutocorrectCandidate && result.centerCandidate.isNotEmpty() && !result.centerCandidate.equals(typed, ignoreCase = true)) {
                         // Replace misspelled word with autocorrect candidate!
                         ic.deleteSurroundingText(typed.length, 0)
@@ -673,6 +686,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                         dictionaryEngine.undoManager.recordReplacement(typed, result.centerCandidate)
                         dictionaryEngine.onWordCommitted(result.centerCandidate, previousWords.lastOrNull())
                         wordBuffer.clear()
+                        currentWordTouches.clear()
                         updateNextWordPredictions()
                         return
                     }
@@ -684,6 +698,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 }
                 ic.commitText(" ", 1)
                 wordBuffer.clear()
+                currentWordTouches.clear()
                 updateNextWordPredictions()
             }
 
@@ -695,6 +710,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                     ic.sendKeyEvent(KeyEvent(KeyEvent.ACTION_UP, KeyEvent.KEYCODE_ENTER))
                 }
                 wordBuffer.clear()
+                currentWordTouches.clear()
                 suggestionStripView?.clearSuggestions()
             }
 
@@ -716,12 +732,15 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         }
     }
 
-    override fun onText(text: String) {
+    override fun onText(text: String, touchX: Float, touchY: Float) {
         val ic = currentInputConnection ?: return
         spellingCalloutView?.dismiss()
         ic.commitText(text, 1)
 
         if (text.length == 1 && (text[0].isLetter() || text[0] == '\'')) {
+            if (touchX >= 0f && touchY >= 0f) {
+                currentWordTouches.add(org.iosclone.keyboard.dictionary.TouchPoint(text[0], touchX, touchY))
+            }
             wordBuffer.append(text)
             updateSuggestions()
             inlineTranslator.onTextChanged(wordBuffer.toString())
@@ -733,6 +752,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             }
         } else {
             wordBuffer.clear()
+            currentWordTouches.clear()
             updateNextWordPredictions()
         }
     }
@@ -750,12 +770,17 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             ic.deleteSurroundingText(len, 0)
             ic.commitText(undoRecord.originalTyped, 1)
             wordBuffer.clear()
+            currentWordTouches.clear()
             wordBuffer.append(undoRecord.originalTyped)
             updateSuggestions()
             return
         }
 
         ic.deleteSurroundingText(1, 0)
+
+        if (currentWordTouches.isNotEmpty()) {
+            currentWordTouches.removeAt(currentWordTouches.size - 1)
+        }
 
         if (wordBuffer.isNotEmpty()) {
             wordBuffer.deleteCharAt(wordBuffer.length - 1)
@@ -836,6 +861,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             dictionaryEngine.onWordCommitted(topWord, previousWords.dropLast(1).lastOrNull())
         }
         wordBuffer.clear()
+        currentWordTouches.clear()
         updateNextWordPredictions()
     }
 
@@ -853,6 +879,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         val previousWords = extractPreviousWords(textBefore)
         dictionaryEngine.onWordCommitted(candidate, previousWords.dropLast(1).lastOrNull())
         wordBuffer.clear()
+        currentWordTouches.clear()
         updateNextWordPredictions()
     }
 
@@ -864,10 +891,13 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         val ic = currentInputConnection ?: return
         val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
         val previousWords = extractPreviousWords(textBefore)
+        val keyMatrix = keyboardView?.layout?.keyMatrix
         val result = dictionaryEngine.getSuggestions(
             rawInput = wordBuffer.toString(),
             previousWords = previousWords,
-            autocorrectEnabled = preferences.autocorrectEnabled
+            autocorrectEnabled = preferences.autocorrectEnabled,
+            touchPoints = currentWordTouches,
+            keyMatrix = keyMatrix
         )
         suggestionStripView?.setSuggestions(result)
     }

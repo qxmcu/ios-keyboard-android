@@ -450,7 +450,7 @@ class IOSKeyboardView @JvmOverloads constructor(
                         if (preferences.keyPopupsEnabled) {
                             popupOverlay?.showMagnifier(key, this) ?: magnifierPopup.onKeyDown(key)
                         }
-                        mainHandler.postDelayed(longPressRunnable, 450L)
+                        mainHandler.postDelayed(longPressRunnable, 550L)
                     }
                 }
                 invalidate()
@@ -473,7 +473,7 @@ class IOSKeyboardView @JvmOverloads constructor(
                 }
 
                 if (isLongPressActive) {
-                    popupOverlay?.updateLongPressSelection(x) ?: longPressPopup.updateSelection(x)
+                    popupOverlay?.updateLongPressSelection(x, y) ?: longPressPopup.updateSelection(x, y, pressedKey)
                     invalidate()
                     return true
                 }
@@ -489,7 +489,7 @@ class IOSKeyboardView @JvmOverloads constructor(
                 // Check glide gesture initiation
                 val dist = abs(x - glideStartX) + abs(y - glideStartY)
                 val density = resources.displayMetrics.density
-                if (dist > (16f * density) && preferences.gestureTypingEnabled && pressedKey?.keyType == KeyType.CHARACTER) {
+                if (dist > (16f * density) && preferences.gestureTypingEnabled && pressedKey != null && pressedKey?.keyType != KeyType.DELETE) {
                     isGliding = true
                     popupOverlay?.hideMagnifier()
                     mainHandler.removeCallbacks(longPressRunnable)
@@ -527,7 +527,7 @@ class IOSKeyboardView @JvmOverloads constructor(
                             if (preferences.keyPopupsEnabled) {
                                 popupOverlay?.showMagnifier(key, this) ?: magnifierPopup.onKeyDown(key)
                             }
-                            mainHandler.postDelayed(longPressRunnable, 450L)
+                            mainHandler.postDelayed(longPressRunnable, 550L)
                         }
                     } else {
                         popupOverlay?.hideMagnifier()
@@ -557,7 +557,7 @@ class IOSKeyboardView @JvmOverloads constructor(
                         if (selectedAccent != null) {
                             actionListener?.onText(selectedAccent)
                         } else {
-                            dispatchKeyAction(key)
+                            dispatchKeyAction(key, x, y)
                         }
                     }
                     popupOverlay?.hideLongPress() ?: longPressPopup.dismiss()
@@ -587,7 +587,7 @@ class IOSKeyboardView @JvmOverloads constructor(
                     if (key.keyType == KeyType.DELETE) {
                         isContinuousBackspaceActive = false
                     } else {
-                        dispatchKeyAction(key)
+                        dispatchKeyAction(key, x, y)
                     }
                 }
 
@@ -616,9 +616,9 @@ class IOSKeyboardView @JvmOverloads constructor(
         return super.onTouchEvent(event)
     }
 
-    private fun dispatchKeyAction(key: KeyDefinition) {
+    private fun dispatchKeyAction(key: KeyDefinition, touchX: Float = -1f, touchY: Float = -1f) {
         when (key.keyType) {
-            KeyType.CHARACTER -> actionListener?.onText(key.label)
+            KeyType.CHARACTER -> actionListener?.onText(key.label, touchX, touchY)
             KeyType.SPACE -> actionListener?.onKey(key)
             KeyType.DELETE -> actionListener?.onDelete()
             KeyType.SHIFT -> actionListener?.onShiftToggle()

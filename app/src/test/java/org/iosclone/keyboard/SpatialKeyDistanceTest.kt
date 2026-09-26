@@ -31,4 +31,24 @@ class SpatialKeyDistanceTest {
         val adjacentTypoDist = SpatialKeyDistance.spatialDistance("giod", "good")
         assertTrue("Adjacent typo should be scored <= 0.6", adjacentTypoDist <= 0.6f)
     }
+
+    @Test
+    fun testPhysicalTouchPointsDistance() {
+        val keyMatrix = mapOf(
+            'v' to org.iosclone.keyboard.dictionary.KeyCenter(100f, 200f),
+            'b' to org.iosclone.keyboard.dictionary.KeyCenter(150f, 200f),
+            'p' to org.iosclone.keyboard.dictionary.KeyCenter(400f, 50f)
+        )
+
+        // User typed 'v' but physical touch was at (135f, 200f), very close to 'b' (150f)
+        val touches = listOf(
+            org.iosclone.keyboard.dictionary.TouchPoint('v', 135f, 200f)
+        )
+
+        val costToB = SpatialKeyDistance.spatialDistance("v", "b", touches, keyMatrix)
+        val costToP = SpatialKeyDistance.spatialDistance("v", "p", touches, keyMatrix)
+
+        assertTrue("Cost to physically close key 'b' should be lower than distant 'p'", costToB < costToP)
+        assertTrue("Cost to 'b' should be <= 0.45", costToB <= 0.45f)
+    }
 }

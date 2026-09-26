@@ -26,8 +26,16 @@ class LongPressPopup {
 
     fun isShowing(): Boolean = itemBounds.isNotEmpty()
 
-    fun updateSelection(touchX: Float) {
+    fun updateSelection(touchX: Float, touchY: Float = Float.MAX_VALUE, key: KeyDefinition? = null) {
         if (itemBounds.isEmpty()) return
+
+        // If finger is still on the keyboard key row or below it, do NOT select an accent
+        if (key != null && touchY >= key.bounds.top) {
+            selectedIndex = -1
+            hasDraggedToSelection = false
+            return
+        }
+
         for (i in itemBounds.indices) {
             val r = itemBounds[i]
             if (touchX >= r.left && touchX <= r.right) {
@@ -36,13 +44,15 @@ class LongPressPopup {
                 return
             }
         }
-        // If outside left/right bounds, clamp if user has moved horizontally
-        if (touchX < popupBounds.left) {
-            selectedIndex = 0
-            hasDraggedToSelection = true
-        } else if (touchX > popupBounds.right) {
-            selectedIndex = itemBounds.lastIndex
-            hasDraggedToSelection = true
+        // If finger moved upward into the accent popover vertical region, clamp horizontally
+        if (key != null && touchY < key.bounds.top) {
+            if (touchX < popupBounds.left) {
+                selectedIndex = 0
+                hasDraggedToSelection = true
+            } else if (touchX > popupBounds.right) {
+                selectedIndex = itemBounds.lastIndex
+                hasDraggedToSelection = true
+            }
         }
     }
 

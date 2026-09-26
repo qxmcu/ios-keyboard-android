@@ -19,10 +19,7 @@ class GesturePathMatcher {
         layout: KeyboardLayout,
         trie: Trie?
     ): List<String> {
-        if (points.size < 3) return emptyList()
-
-        val isSymbolOrNumeric = (layout.mode == org.iosclone.keyboard.layout.KeyboardMode.NUMERIC ||
-                layout.mode == org.iosclone.keyboard.layout.KeyboardMode.SYMBOL)
+        if (points.size < 2) return emptyList()
 
         // 1. Identify start and end character keys (with nearest-key tolerance)
         val firstPt = points.first()
@@ -33,6 +30,10 @@ class GesturePathMatcher {
 
         val startChar = startKey.label.firstOrNull() ?: return emptyList()
         val endChar = endKey.label.firstOrNull() ?: return emptyList()
+
+        val isSymbolOrNumeric = (layout.mode == org.iosclone.keyboard.layout.KeyboardMode.NUMERIC ||
+                layout.mode == org.iosclone.keyboard.layout.KeyboardMode.SYMBOL ||
+                !startChar.isLetter())
 
         // 2. Extract ordered sequence of keys traversed along the path
         val traversedChars = mutableListOf<Char>()

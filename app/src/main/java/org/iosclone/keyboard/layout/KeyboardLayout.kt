@@ -25,6 +25,9 @@ class KeyboardLayout(
     val globeKeyDefinition = KeyDefinition(code = -10, label = "🌐", keyType = KeyType.GLOBE, weight = 1.0f)
     val dictationKeyDefinition = KeyDefinition(code = -11, label = "🎙", keyType = KeyType.DICTATION, weight = 1.0f)
 
+    // Spatial key matrix mapping characters to physical center coordinates
+    val keyMatrix: MutableMap<Char, org.iosclone.keyboard.dictionary.KeyCenter> = mutableMapOf()
+
     /**
      * Dynamically calculates bounds and touch targets for each key across all rows
      * with authentic iOS proportions, automatically adapting across all Android phone models
@@ -36,6 +39,7 @@ class KeyboardLayout(
         density: Float,
         bottomInset: Float = 0f
     ) {
+        keyMatrix.clear()
         if (rows.isEmpty() || viewWidth <= 0 || viewHeight <= 0) return
 
         val widthDp = viewWidth / density
@@ -299,6 +303,10 @@ class KeyboardLayout(
             left + width + (gapX / 2f),
             top + height + (gapY / 2f)
         )
+        if (key.label.length == 1) {
+            val ch = key.label[0].lowercaseChar()
+            keyMatrix[ch] = org.iosclone.keyboard.dictionary.KeyCenter(left + (width / 2f), top + (height / 2f))
+        }
     }
 
     fun findKeyAt(x: Float, y: Float): KeyDefinition? {

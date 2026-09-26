@@ -6,7 +6,7 @@ import org.iosclone.keyboard.layout.KeyboardMode
 
 interface KeyboardActionListener {
     fun onKey(key: KeyDefinition)
-    fun onText(text: String)
+    fun onText(text: String, touchX: Float = -1f, touchY: Float = -1f)
     fun onDelete()
     fun onShiftToggle()
     fun onModeChange(mode: KeyboardMode)

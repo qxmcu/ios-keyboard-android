@@ -64,12 +64,12 @@ class KeyMagnifierPopup {
         val bubbleTop = bounds.top - bubbleHeight + (4f * density)
         val upperBubbleBottom = bounds.top - (2f * density)
 
-        // Spring pop scaling animation (0.90 -> 1.0 in ~60ms)
-        val elapsed = if (activeKey == key) (System.currentTimeMillis() - pressStartTime).coerceIn(0L, 65L) else 65L
-        val scale = 0.90f + (0.10f * (elapsed / 65f))
+        // Snappy iOS key popup animation anchored at key bottom
+        val elapsed = if (activeKey == key) (System.currentTimeMillis() - pressStartTime).coerceIn(0L, 45L) else 45L
+        val scale = 0.94f + (0.06f * (elapsed / 45f))
 
         canvas.save()
-        canvas.scale(scale, scale, bounds.centerX(), bounds.centerY())
+        canvas.scale(scale, scale, bounds.centerX(), bounds.bottom)
 
         // Build continuous, non-self-intersecting smooth balloon path
         bubblePath.reset()

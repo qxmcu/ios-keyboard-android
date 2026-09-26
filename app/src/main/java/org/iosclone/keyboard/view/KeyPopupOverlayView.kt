@@ -58,9 +58,10 @@ class KeyPopupOverlayView(context: Context) : View(context) {
         invalidate()
     }
 
-    fun updateLongPressSelection(touchX: Float) {
-        if (isLongPress && activeKey != null) {
-            longPressPopup.updateSelection(touchX)
+    fun updateLongPressSelection(touchX: Float, touchY: Float = Float.MAX_VALUE) {
+        val key = activeKey
+        if (isLongPress && key != null) {
+            longPressPopup.updateSelection(touchX, touchY, key)
             invalidate()
         }
     }
