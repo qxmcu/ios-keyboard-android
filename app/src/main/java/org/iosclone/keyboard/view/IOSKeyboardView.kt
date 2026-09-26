@@ -294,8 +294,9 @@ class IOSKeyboardView @JvmOverloads constructor(
         val alphaMultiplier = if (isTrackpadMode) 0.4f else 1.0f
 
         // Draw physical bottom drop shadow
+        val baseShadowAlpha = android.graphics.Color.alpha(currentTheme.keyShadow)
         keyShadowPaint.color = currentTheme.keyShadow
-        keyShadowPaint.alpha = (255 * alphaMultiplier).toInt()
+        keyShadowPaint.alpha = (baseShadowAlpha * alphaMultiplier).toInt()
         val shadowRect = RectF(bounds.left, bounds.top + shadowOffset, bounds.right, bounds.bottom + shadowOffset)
         canvas.drawRoundRect(shadowRect, cornerRadius, cornerRadius, keyShadowPaint)
 
@@ -306,8 +307,9 @@ class IOSKeyboardView @JvmOverloads constructor(
             isModifier -> if (isPressed) currentTheme.modifierKeyBackgroundPressed else currentTheme.modifierKeyBackground
             else -> if (isPressed) currentTheme.keyBackgroundPressed else currentTheme.keyBackground
         }
+        val baseBgAlpha = android.graphics.Color.alpha(surfaceColor)
         keyBgPaint.color = surfaceColor
-        keyBgPaint.alpha = (255 * alphaMultiplier).toInt()
+        keyBgPaint.alpha = (baseBgAlpha * alphaMultiplier).toInt()
         canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, keyBgPaint)
 
         // Key Content (Icon or Label)

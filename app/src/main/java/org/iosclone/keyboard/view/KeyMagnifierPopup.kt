@@ -108,7 +108,7 @@ class KeyMagnifierPopup {
         bubblePath.close()
 
         // Soft drop shadow for elevated iOS key popup
-        shadowPaint.color = theme.popupShadow
+        shadowPaint.color = if (theme.isDark) android.graphics.Color.argb(70, 0, 0, 0) else android.graphics.Color.argb(35, 0, 0, 0)
         canvas.save()
         canvas.translate(0f, 3f * density)
         canvas.drawPath(bubblePath, shadowPaint)

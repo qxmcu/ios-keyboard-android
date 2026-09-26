@@ -27,6 +27,9 @@ class SuggestionStripView @JvmOverloads constructor(
     private val sep1: View
     private val sep2: View
     private val writingToolsBtn: AppleIntelligenceIconView
+    private val candidatesLayout: LinearLayout
+    private val dictationStatusContainer: LinearLayout
+    private val dictationStatusTv: TextView
     private val dividerPaint = Paint().apply {
         strokeWidth = 1f
     }
@@ -102,7 +105,7 @@ class SuggestionStripView @JvmOverloads constructor(
         addView(writingToolsBtn)
 
         // Candidates row takes 100% available width
-        val candidatesLayout = LinearLayout(context).apply {
+        candidatesLayout = LinearLayout(context).apply {
             orientation = HORIZONTAL
             layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.0f)
             gravity = Gravity.CENTER_VERTICAL
@@ -120,6 +123,37 @@ class SuggestionStripView @JvmOverloads constructor(
         candidatesLayout.addView(sep2)
         candidatesLayout.addView(rightCandidateTv)
         addView(candidatesLayout)
+
+        // Live Dictation Status & Siri wave indicator
+        dictationStatusContainer = LinearLayout(context).apply {
+            orientation = HORIZONTAL
+            gravity = Gravity.CENTER
+            visibility = View.GONE
+            layoutParams = LayoutParams(0, LayoutParams.MATCH_PARENT, 1.0f)
+        }
+        dictationStatusTv = TextView(context).apply {
+            textSize = 15f
+            typeface = Typeface.DEFAULT_BOLD
+            gravity = Gravity.CENTER
+            text = "🎙 Listening…"
+            maxLines = 1
+            ellipsize = android.text.TextUtils.TruncateAt.END
+        }
+        dictationStatusContainer.addView(dictationStatusTv)
+        addView(dictationStatusContainer)
+    }
+
+    fun setDictationStatus(statusText: String?) {
+        if (statusText != null) {
+            candidatesLayout.visibility = View.GONE
+            quickPasteContainer.visibility = View.GONE
+            dictationStatusContainer.visibility = View.VISIBLE
+            dictationStatusTv.text = statusText
+            dictationStatusTv.setTextColor(currentTheme.accentBlue)
+        } else {
+            dictationStatusContainer.visibility = View.GONE
+            candidatesLayout.visibility = View.VISIBLE
+        }
     }
 
     private fun createCandidateView(weight: Float, isCenter: Boolean = false): TextView {

@@ -147,24 +147,24 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 }
                 VoiceDictationEngine.VoiceCommand.STOP -> {
                     voiceDictationEngine.stopListening()
-                    dictationOverlayView?.visibility = View.GONE
-                    keyboardView?.visibility = View.VISIBLE
+                    suggestionStripView?.setDictationStatus(null)
                 }
             }
         }
-        voiceDictationEngine.onAudioLevelChanged = { rms ->
-            dictationOverlayView?.setAudioLevel(rms)
+        voiceDictationEngine.onPartialTextRecognized = { partial ->
+            suggestionStripView?.setDictationStatus("🎙 $partial")
         }
         voiceDictationEngine.onStatusChanged = { status ->
-            dictationOverlayView?.setStatus(status)
+            if (voiceDictationEngine.isDictationActive) {
+                suggestionStripView?.setDictationStatus(status)
+            }
         }
         voiceDictationEngine.onPermissionNeeded = {
             requestAudioPermission()
         }
         voiceDictationEngine.onDictationStateChanged = { listening ->
-            if (!listening && !voiceDictationEngine.isDictationActive) {
-                dictationOverlayView?.visibility = View.GONE
-                keyboardView?.visibility = View.VISIBLE
+            if (!listening) {
+                suggestionStripView?.setDictationStatus(null)
             }
         }
     }
@@ -245,20 +245,18 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 val selectedText = currentInputConnection?.getSelectedText(0)?.toString() ?: ""
                 val textToProcess = if (selectedText.isNotBlank()) selectedText else textBefore.takeLast(160).trim()
 
-                WritingToolsBottomSheet(
-                    context = this@IOSInputMethodService,
-                    theme = currentTheme,
-                    currentText = textToProcess
-                ) { replacement ->
-                    if (selectedText.isNotBlank()) {
-                        currentInputConnection?.commitText(replacement, 1)
-                    } else if (textToProcess.isNotEmpty()) {
-                        currentInputConnection?.deleteSurroundingText(textToProcess.length, 0)
-                        currentInputConnection?.commitText(replacement, 1)
-                    }
-                    wordBuffer.clear()
-                    updateNextWordPredictions()
-                }.show(parent)
+                if (preferences.geminiApiKey.isBlank()) {
+                    val isReminder = preferences.writingToolsSetupDeclined
+                    org.iosclone.keyboard.writingtools.WritingToolsSetupSheet(
+                        context = this@IOSInputMethodService,
+                        theme = currentTheme,
+                        preferences = preferences
+                    ) {
+                        openWritingToolsSheet(parent, textToProcess, selectedText)
+                    }.show(parent, isReminder = isReminder)
+                } else {
+                    openWritingToolsSheet(parent, textToProcess, selectedText)
+                }
             }
         }
         spellingCalloutView = org.iosclone.keyboard.view.IOSSpellingCalloutView(this)
@@ -724,8 +722,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             KeyType.DICTATION -> {
                 if (voiceDictationEngine.isDictationActive) {
                     voiceDictationEngine.stopListening()
-                    dictationOverlayView?.visibility = View.GONE
-                    keyboardView?.visibility = View.VISIBLE
+                    suggestionStripView?.setDictationStatus(null)
                 } else {
                     if (!voiceDictationEngine.hasAudioPermission()) {
                         requestAudioPermission()
@@ -740,6 +737,10 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     }
 
     override fun onText(text: String, touchX: Float, touchY: Float) {
+        if (voiceDictationEngine.isDictationActive) {
+            voiceDictationEngine.stopListening()
+            suggestionStripView?.setDictationStatus(null)
+        }
         val ic = currentInputConnection ?: return
         spellingCalloutView?.dismiss()
         ic.commitText(text, 1)
@@ -765,6 +766,10 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     }
 
     override fun onDelete() {
+        if (voiceDictationEngine.isDictationActive) {
+            voiceDictationEngine.stopListening()
+            suggestionStripView?.setDictationStatus(null)
+        }
         val ic = currentInputConnection ?: return
         spellingCalloutView?.dismiss()
         val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
@@ -950,12 +955,26 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     }
 
     private fun startDictationMode() {
-        keyboardView?.visibility = View.GONE
-        emojiPickerView?.visibility = View.GONE
-        clipboardDrawerView?.visibility = View.GONE
-        dictationOverlayView?.visibility = View.VISIBLE
-        dictationOverlayView?.setStatus("🎙 Listening…")
+        showMainKeyboard()
+        suggestionStripView?.setDictationStatus("🎙 Listening…")
         voiceDictationEngine.startListening(currentLanguage.localeCode)
+    }
+
+    private fun openWritingToolsSheet(parent: ViewGroup, textToProcess: String, selectedText: String) {
+        WritingToolsBottomSheet(
+            context = this@IOSInputMethodService,
+            theme = currentTheme,
+            currentText = textToProcess
+        ) { replacement ->
+            if (selectedText.isNotBlank()) {
+                currentInputConnection?.commitText(replacement, 1)
+            } else if (textToProcess.isNotEmpty()) {
+                currentInputConnection?.deleteSurroundingText(textToProcess.length, 0)
+                currentInputConnection?.commitText(replacement, 1)
+            }
+            wordBuffer.clear()
+            updateNextWordPredictions()
+        }.show(parent)
     }
 
     override fun onDestroy() {

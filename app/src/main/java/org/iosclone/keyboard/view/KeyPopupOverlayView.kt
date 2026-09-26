@@ -25,7 +25,9 @@ class KeyPopupOverlayView(context: Context) : View(context) {
     init {
         isClickable = false
         isFocusable = false
-        visibility = View.GONE
+        visibility = View.VISIBLE
+        setBackgroundColor(android.graphics.Color.TRANSPARENT)
+        setWillNotDraw(false)
     }
 
     fun setTheme(theme: ThemeColors) {
@@ -38,14 +40,12 @@ class KeyPopupOverlayView(context: Context) : View(context) {
         this.activeKey = key
         this.isLongPress = false
         magnifierPopup.onKeyDown(key)
-        visibility = View.VISIBLE
         invalidate()
     }
 
     fun hideMagnifier() {
         if (!isLongPress) {
             activeKey = null
-            visibility = View.GONE
             invalidate()
         }
     }
@@ -54,7 +54,6 @@ class KeyPopupOverlayView(context: Context) : View(context) {
         this.keyboardView = originView
         this.activeKey = key
         this.isLongPress = true
-        visibility = View.VISIBLE
         invalidate()
     }
 
@@ -74,7 +73,6 @@ class KeyPopupOverlayView(context: Context) : View(context) {
         isLongPress = false
         activeKey = null
         longPressPopup.dismiss()
-        visibility = View.GONE
         invalidate()
     }
 
@@ -84,14 +82,15 @@ class KeyPopupOverlayView(context: Context) : View(context) {
         val origin = keyboardView ?: return
         val density = resources.displayMetrics.density
 
-        // Compute origin offset relative to overlay view
-        val originLoc = IntArray(2)
-        origin.getLocationInWindow(originLoc)
-        val overlayLoc = IntArray(2)
-        getLocationInWindow(overlayLoc)
-
-        val offsetX = (originLoc[0] - overlayLoc[0]).toFloat()
-        val offsetY = (originLoc[1] - overlayLoc[1]).toFloat()
+        // Compute local relative coordinate offset directly without WindowManager IPC
+        var offsetX = 0f
+        var offsetY = 0f
+        var v: View? = origin
+        while (v != null && v !== this.parent && v !== this) {
+            offsetX += v.x
+            offsetY += v.y
+            v = v.parent as? View
+        }
 
         canvas.save()
         canvas.translate(offsetX, offsetY)

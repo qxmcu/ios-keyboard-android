@@ -75,8 +75,9 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
     var bottomSpacing by remember { mutableIntStateOf(prefs.bottomSpacingDp) }
 
     var isCheckingUpdate by remember { mutableStateOf(false) }
-    var updateSubtitle by remember { mutableStateOf("v1.2.7 (Current)") }
+    var updateSubtitle by remember { mutableStateOf("v1.2.8 (Current)") }
     var updateProgress by remember { mutableIntStateOf(-1) }
+    var geminiApiKey by remember { mutableStateOf(prefs.geminiApiKey) }
 
     var clipboardHistory by remember { mutableStateOf(prefs.clipboardHistoryEnabled) }
     var clipboardAutoSuggest by remember { mutableStateOf(prefs.clipboardAutoSuggest) }
@@ -298,11 +299,43 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                 )
                 IOSSettingsToggleRow(
                     title = "Apple Intelligence Writing Tools",
-                    subtitle = "On-device proofreading, tone rewriting, and Genmoji",
+                    subtitle = "Powered by Google Gemini Flash-Lite",
                     checked = writingTools,
                     onCheckedChange = {
                         writingTools = it
                         prefs.writingToolsEnabled = it
+                    }
+                )
+                IOSSettingsActionRow(
+                    title = "Gemini API Key",
+                    trailingText = if (geminiApiKey.isNotBlank()) "Configured" else "Not Set",
+                    onClick = {
+                        val input = android.widget.EditText(context).apply {
+                            setText(prefs.geminiApiKey)
+                            hint = "Paste Gemini API Key"
+                            inputType = android.text.InputType.TYPE_CLASS_TEXT or android.text.InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
+                        }
+                        AlertDialog.Builder(context)
+                            .setTitle("Gemini API Key")
+                            .setMessage("Enter your Google Gemini API key to power Apple Intelligence Writing Tools with zero battery drain.")
+                            .setView(input)
+                            .setPositiveButton("Save") { _, _ ->
+                                val key = input.text.toString().trim()
+                                prefs.geminiApiKey = key
+                                geminiApiKey = key
+                                prefs.writingToolsSetupDeclined = false
+                                android.widget.Toast.makeText(context, "API Key saved", android.widget.Toast.LENGTH_SHORT).show()
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .setNeutralButton("Get Key") { _, _ ->
+                                try {
+                                    val intent = Intent(Intent.ACTION_VIEW, Uri.parse("https://aistudio.google.com/app/apikey")).apply {
+                                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    }
+                                    context.startActivity(intent)
+                                } catch (_: Exception) {}
+                            }
+                            .show()
                     }
                 )
                 IOSSettingsToggleRow(

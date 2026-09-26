@@ -70,7 +70,6 @@ class AppleIntelligenceIconView @JvmOverloads constructor(
             }
             MotionEvent.ACTION_UP -> {
                 clickAnimator.start()
-                performClick()
             }
             MotionEvent.ACTION_CANCEL -> {
                 scaleFactor = 1.0f

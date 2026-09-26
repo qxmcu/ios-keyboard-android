@@ -2,7 +2,6 @@ package org.iosclone.keyboard.writingtools
 
 import android.animation.Animator
 import android.animation.AnimatorListenerAdapter
-import android.animation.ObjectAnimator
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.Context
@@ -21,19 +20,29 @@ import android.widget.LinearLayout
 import android.widget.ScrollView
 import android.widget.TextView
 import android.widget.Toast
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
+import kotlinx.coroutines.launch
+import org.iosclone.keyboard.R
+import org.iosclone.keyboard.settings.KeyboardPreferences
 import org.iosclone.keyboard.theme.ThemeColors
 import org.iosclone.keyboard.view.AppleIntelligenceIconView
 
 /**
  * Pixel-perfect iOS 18 Apple Intelligence Writing Tools UI bottom sheet.
+ * Powered by Google Gemini Flash-Lite for sub-second, battery-efficient inference.
+ *
  * Features:
  * - Top drag handle
- * - "Writing Tools" title + 1-tap instant circular (X) close button (no 2-tap glitch)
- * - "Describe your change" prompt pill with iridescent Siri emblem
- * - 2 large action cards: Proofread & Rewrite
- * - 3 tone cards: Friendly, Professional, Concise
- * - 4 format cards: Summary, Key Points, List, Table
- * - Compose card
+ * - "Writing Tools" title + 1-tap instant circular (X) close button
+ * - "Describe your change" prompt pill with Apple Intelligence glowing emblem
+ * - 2 large action cards: Proofread & Rewrite (with Apple SF-Symbol vector icons)
+ * - 3 tone cards: Friendly, Professional, Concise (with Apple SF-Symbol vector icons)
+ * - 4 format cards: Summary, Key Points, List, Table (with Apple SF-Symbol vector icons)
+ * - Compose card (with Apple SF-Symbol vector icons)
+ * - Single-instance guard preventing duplicate opening
  * - Result preview with Apple Intelligence iridescent glowing border and 1-tap Replace
  */
 class WritingToolsBottomSheet(
@@ -43,12 +52,24 @@ class WritingToolsBottomSheet(
     private val onReplaceText: (String) -> Unit
 ) {
 
-    private val engine = WritingToolsEngine()
+    companion object {
+        @Volatile
+        var isShowing = false
+    }
+
+    private val preferences = KeyboardPreferences(context)
+    private val geminiClient = GeminiWritingToolsClient(context)
+    private val scope = CoroutineScope(Dispatchers.Main + SupervisorJob())
+
     private var containerView: FrameLayout? = null
     private var sheetLayout: LinearLayout? = null
     private var isDismissing = false
 
     fun show(parentContainer: ViewGroup) {
+        if (isShowing) return
+        isShowing = true
+        isDismissing = false
+
         val density = context.resources.displayMetrics.density
 
         // Full scrim + sheet overlay
@@ -64,36 +85,32 @@ class WritingToolsBottomSheet(
         }
         containerView = overlay
 
-        // Floating rounded bottom card
+        // Floating rounded bottom sheet matching Apple Intelligence card
         val sheet = LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
+            val padH = (16 * density).toInt()
+            val padV = (12 * density).toInt()
+            setPadding(padH, padV, padH, (24 * density).toInt())
             isClickable = true
             isFocusable = true
-            val bg = GradientDrawable().apply {
-                setColor(if (theme.isDark) Color.parseColor("#E61C1C1E") else Color.parseColor("#F5F5F7"))
-                cornerRadii = floatArrayOf(
-                    26f * density, 26f * density, // top-left
-                    26f * density, 26f * density, // top-right
-                    0f, 0f, // bottom-right
-                    0f, 0f  // bottom-left
-                )
-                setStroke((1 * density).toInt().coerceAtLeast(1), if (theme.isDark) Color.parseColor("#38383A") else Color.parseColor("#D1D1D6"))
-            }
-            background = bg
-            elevation = 20f * density
-            val pad = (14 * density).toInt()
-            setPadding(pad, (8 * density).toInt(), pad, pad)
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 Gravity.BOTTOM
             )
+            background = GradientDrawable().apply {
+                val r = 26f * density
+                cornerRadii = floatArrayOf(r, r, r, r, 0f, 0f, 0f, 0f)
+                setColor(if (theme.isDark) Color.parseColor("#1C1C1E") else Color.parseColor("#F2F2F7"))
+            }
         }
         sheetLayout = sheet
 
-        // 1. Drag Handle
+        // 1. Top Drag Handle
         val dragHandle = View(context).apply {
-            layoutParams = LinearLayout.LayoutParams((36 * density).toInt(), (4.5f * density).toInt()).apply {
+            val w = (38 * density).toInt()
+            val h = (4.5f * density).toInt()
+            layoutParams = LinearLayout.LayoutParams(w, h).apply {
                 gravity = Gravity.CENTER_HORIZONTAL
                 bottomMargin = (10 * density).toInt()
             }
@@ -133,7 +150,6 @@ class WritingToolsBottomSheet(
                 shape = GradientDrawable.OVAL
                 setColor(if (theme.isDark) Color.parseColor("#3A3A3C") else Color.parseColor("#E5E5EA"))
             }
-            // Fix 2-tap glitch: Immediate single-tap dismiss!
             setOnClickListener { dismiss() }
         }
 
@@ -204,7 +220,6 @@ class WritingToolsBottomSheet(
             background = GradientDrawable().apply {
                 setColor(if (theme.isDark) Color.parseColor("#242426") else Color.WHITE)
                 cornerRadius = 14f * density
-                // Apple Intelligence signature iridescent glowing border
                 setStroke((1.5f * density).toInt().coerceAtLeast(1), Color.parseColor("#997B61FF"))
             }
         }
@@ -271,17 +286,50 @@ class WritingToolsBottomSheet(
         resultCard.addView(resultBtnRow)
         toolsContainer.addView(resultCard)
 
-        fun displayResult(newText: String) {
-            resultTv.text = newText
+        fun executeTask(task: WritingToolsTask, text: String, instruction: String = "") {
+            val apiKey = preferences.geminiApiKey
+            if (apiKey.isBlank()) {
+                resultTv.text = "Please set up your Google Gemini API key first."
+                resultCard.visibility = View.VISIBLE
+                replaceBtn.visibility = View.GONE
+                return
+            }
+
+            if (!geminiClient.isNetworkAvailable()) {
+                resultTv.text = "No internet connection. Please connect to the internet."
+                resultCard.visibility = View.VISIBLE
+                replaceBtn.visibility = View.GONE
+                return
+            }
+
+            resultTv.text = "✨ Apple Intelligence is working…"
             resultCard.visibility = View.VISIBLE
+            replaceBtn.visibility = View.VISIBLE
+            replaceBtn.isEnabled = false
+            copyBtn.isEnabled = false
             scrollContent.smoothScrollTo(0, 0)
+
+            scope.launch {
+                val res = geminiClient.executeTask(apiKey, preferences.geminiModel, task, text, instruction)
+                replaceBtn.isEnabled = true
+                copyBtn.isEnabled = true
+                res.fold(
+                    onSuccess = { generated ->
+                        resultTv.text = generated
+                    },
+                    onFailure = { error ->
+                        resultTv.text = error.message ?: "An error occurred. Please try again."
+                        replaceBtn.visibility = View.GONE
+                    }
+                )
+            }
         }
 
         promptEt.setOnEditorActionListener { _, actionId, _ ->
             if (actionId == EditorInfo.IME_ACTION_DONE) {
                 val q = promptEt.text.toString().trim()
                 if (q.isNotEmpty()) {
-                    displayResult(engine.customTransform(currentText, q))
+                    executeTask(WritingToolsTask.CUSTOM, currentText, q)
                 }
                 true
             } else false
@@ -294,13 +342,13 @@ class WritingToolsBottomSheet(
                 bottomMargin = (8 * density).toInt()
             }
         }
-        row1.addView(createCard("🔍✨", "Proofread", 1.0f, density) {
-            displayResult(engine.proofread(currentText).correctedText)
+        row1.addView(createCard(R.drawable.ic_wt_proofread, "Proofread", 1.0f, density) {
+            executeTask(WritingToolsTask.PROOFREAD, currentText)
         })
         val gap1 = View(context).apply { layoutParams = LinearLayout.LayoutParams((8 * density).toInt(), 1) }
         row1.addView(gap1)
-        row1.addView(createCard("🔄✨", "Rewrite", 1.0f, density) {
-            displayResult(engine.rewrite(currentText, WritingToolsEngine.Tone.FRIENDLY))
+        row1.addView(createCard(R.drawable.ic_wt_rewrite, "Rewrite", 1.0f, density) {
+            executeTask(WritingToolsTask.REWRITE, currentText)
         })
         toolsContainer.addView(row1)
 
@@ -311,18 +359,18 @@ class WritingToolsBottomSheet(
                 bottomMargin = (8 * density).toInt()
             }
         }
-        row2.addView(createCard("☺", "Friendly", 1.0f, density) {
-            displayResult(engine.rewrite(currentText, WritingToolsEngine.Tone.FRIENDLY))
+        row2.addView(createCard(R.drawable.ic_wt_friendly, "Friendly", 1.0f, density) {
+            executeTask(WritingToolsTask.FRIENDLY, currentText)
         })
         val gap2a = View(context).apply { layoutParams = LinearLayout.LayoutParams((6 * density).toInt(), 1) }
         row2.addView(gap2a)
-        row2.addView(createCard("💼", "Professional", 1.0f, density) {
-            displayResult(engine.rewrite(currentText, WritingToolsEngine.Tone.PROFESSIONAL))
+        row2.addView(createCard(R.drawable.ic_wt_professional, "Professional", 1.0f, density) {
+            executeTask(WritingToolsTask.PROFESSIONAL, currentText)
         })
         val gap2b = View(context).apply { layoutParams = LinearLayout.LayoutParams((6 * density).toInt(), 1) }
         row2.addView(gap2b)
-        row2.addView(createCard("⇋", "Concise", 1.0f, density) {
-            displayResult(engine.rewrite(currentText, WritingToolsEngine.Tone.CONCISE))
+        row2.addView(createCard(R.drawable.ic_wt_concise, "Concise", 1.0f, density) {
+            executeTask(WritingToolsTask.CONCISE, currentText)
         })
         toolsContainer.addView(row2)
 
@@ -333,23 +381,23 @@ class WritingToolsBottomSheet(
                 bottomMargin = (8 * density).toInt()
             }
         }
-        row3.addView(createMiniCard("📄↓", "Summary", 1.0f, density) {
-            displayResult(engine.summarize(currentText, WritingToolsEngine.SummaryStyle.TLDR))
+        row3.addView(createMiniCard(R.drawable.ic_wt_summary, "Summary", 1.0f, density) {
+            executeTask(WritingToolsTask.SUMMARY, currentText)
         })
         val gap3a = View(context).apply { layoutParams = LinearLayout.LayoutParams((6 * density).toInt(), 1) }
         row3.addView(gap3a)
-        row3.addView(createMiniCard("📋↓", "Key Points", 1.0f, density) {
-            displayResult(engine.summarize(currentText, WritingToolsEngine.SummaryStyle.KEY_POINTS))
+        row3.addView(createMiniCard(R.drawable.ic_wt_keypoints, "Key Points", 1.0f, density) {
+            executeTask(WritingToolsTask.KEY_POINTS, currentText)
         })
         val gap3b = View(context).apply { layoutParams = LinearLayout.LayoutParams((6 * density).toInt(), 1) }
         row3.addView(gap3b)
-        row3.addView(createMiniCard("☰", "List", 1.0f, density) {
-            displayResult(engine.formatList(currentText))
+        row3.addView(createMiniCard(R.drawable.ic_wt_list, "List", 1.0f, density) {
+            executeTask(WritingToolsTask.LIST, currentText)
         })
         val gap3c = View(context).apply { layoutParams = LinearLayout.LayoutParams((6 * density).toInt(), 1) }
         row3.addView(gap3c)
-        row3.addView(createMiniCard("▦", "Table", 1.0f, density) {
-            displayResult(engine.formatTable(currentText))
+        row3.addView(createMiniCard(R.drawable.ic_wt_table, "Table", 1.0f, density) {
+            executeTask(WritingToolsTask.TABLE, currentText)
         })
         toolsContainer.addView(row3)
 
@@ -368,15 +416,16 @@ class WritingToolsBottomSheet(
             val p = (14 * density).toInt()
             setPadding(p, 0, p, 0)
             setOnClickListener {
-                displayResult(engine.composeText(currentText))
+                val prompt = promptEt.text.toString().trim().ifEmpty { "Write a response to: $currentText" }
+                executeTask(WritingToolsTask.COMPOSE, currentText, prompt)
             }
         }
 
-        val composeIcon = TextView(context).apply {
-            text = "✎"
-            textSize = 15f
-            setTextColor(theme.textPrimary)
-            layoutParams = LinearLayout.LayoutParams(LinearLayout.LayoutParams.WRAP_CONTENT, LinearLayout.LayoutParams.WRAP_CONTENT).apply {
+        val composeIcon = ImageView(context).apply {
+            setImageResource(R.drawable.ic_wt_compose)
+            setColorFilter(theme.textPrimary)
+            val s = (18 * density).toInt()
+            layoutParams = LinearLayout.LayoutParams(s, s).apply {
                 marginEnd = (8 * density).toInt()
             }
         }
@@ -389,15 +438,16 @@ class WritingToolsBottomSheet(
             layoutParams = LinearLayout.LayoutParams(0, LinearLayout.LayoutParams.WRAP_CONTENT, 1.0f)
         }
 
-        val chevronTv = TextView(context).apply {
-            text = "›"
-            textSize = 18f
-            setTextColor(if (theme.isDark) Color.parseColor("#8E8E93") else Color.parseColor("#AEAEB2"))
+        val chevronIv = ImageView(context).apply {
+            setImageResource(R.drawable.ic_chevron_right)
+            setColorFilter(if (theme.isDark) Color.parseColor("#8E8E93") else Color.parseColor("#AEAEB2"))
+            val s = (16 * density).toInt()
+            layoutParams = LinearLayout.LayoutParams(s, s)
         }
 
         composeCard.addView(composeIcon)
         composeCard.addView(composeTv)
-        composeCard.addView(chevronTv)
+        composeCard.addView(chevronIv)
         toolsContainer.addView(composeCard)
 
         scrollContent.addView(toolsContainer)
@@ -416,7 +466,7 @@ class WritingToolsBottomSheet(
             .start()
     }
 
-    private fun createCard(icon: String, title: String, weight: Float, density: Float, onClick: () -> Unit): LinearLayout {
+    private fun createCard(iconResId: Int, title: String, weight: Float, density: Float, onClick: () -> Unit): LinearLayout {
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -427,10 +477,13 @@ class WritingToolsBottomSheet(
             }
             setOnClickListener { onClick() }
 
-            val iconTv = TextView(context).apply {
-                text = icon
-                textSize = 15f
-                gravity = Gravity.CENTER
+            val iconIv = ImageView(context).apply {
+                setImageResource(iconResId)
+                setColorFilter(theme.textPrimary)
+                val s = (18 * density).toInt()
+                layoutParams = LinearLayout.LayoutParams(s, s).apply {
+                    bottomMargin = (2 * density).toInt()
+                }
             }
             val labelTv = TextView(context).apply {
                 text = title
@@ -439,12 +492,12 @@ class WritingToolsBottomSheet(
                 setTextColor(theme.textPrimary)
                 gravity = Gravity.CENTER
             }
-            addView(iconTv)
+            addView(iconIv)
             addView(labelTv)
         }
     }
 
-    private fun createMiniCard(icon: String, title: String, weight: Float, density: Float, onClick: () -> Unit): LinearLayout {
+    private fun createMiniCard(iconResId: Int, title: String, weight: Float, density: Float, onClick: () -> Unit): LinearLayout {
         return LinearLayout(context).apply {
             orientation = LinearLayout.VERTICAL
             gravity = Gravity.CENTER
@@ -455,10 +508,13 @@ class WritingToolsBottomSheet(
             }
             setOnClickListener { onClick() }
 
-            val iconTv = TextView(context).apply {
-                text = icon
-                textSize = 15f
-                gravity = Gravity.CENTER
+            val iconIv = ImageView(context).apply {
+                setImageResource(iconResId)
+                setColorFilter(theme.textPrimary)
+                val s = (17 * density).toInt()
+                layoutParams = LinearLayout.LayoutParams(s, s).apply {
+                    bottomMargin = (2 * density).toInt()
+                }
             }
             val labelTv = TextView(context).apply {
                 text = title
@@ -467,7 +523,7 @@ class WritingToolsBottomSheet(
                 setTextColor(theme.textPrimary)
                 gravity = Gravity.CENTER
             }
-            addView(iconTv)
+            addView(iconIv)
             addView(labelTv)
         }
     }
@@ -475,6 +531,8 @@ class WritingToolsBottomSheet(
     fun dismiss() {
         if (isDismissing) return
         isDismissing = true
+        isShowing = false
+        scope.cancel()
         val sheet = sheetLayout
         val container = containerView
         if (sheet != null && container != null) {

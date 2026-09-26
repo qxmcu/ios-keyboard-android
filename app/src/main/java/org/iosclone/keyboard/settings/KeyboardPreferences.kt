@@ -111,4 +111,16 @@ class KeyboardPreferences(context: Context) {
     var showPeriodKey: Boolean
         get() = prefs.getBoolean("show_period_key", false)
         set(value) = prefs.edit().putBoolean("show_period_key", value).apply()
+
+    var geminiApiKey: String
+        get() = prefs.getString("gemini_api_key", "") ?: ""
+        set(value) = prefs.edit().putString("gemini_api_key", value.trim()).apply()
+
+    var geminiModel: String
+        get() = prefs.getString("gemini_model", "gemini-2.0-flash-lite") ?: "gemini-2.0-flash-lite"
+        set(value) = prefs.edit().putString("gemini_model", value.trim()).apply()
+
+    var writingToolsSetupDeclined: Boolean
+        get() = prefs.getBoolean("writing_tools_setup_declined", false)
+        set(value) = prefs.edit().putBoolean("writing_tools_setup_declined", value).apply()
 }
