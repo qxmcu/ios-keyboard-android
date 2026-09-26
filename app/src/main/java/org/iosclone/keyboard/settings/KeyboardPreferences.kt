@@ -87,4 +87,16 @@ class KeyboardPreferences(context: Context) {
     var translationEndpoint: String
         get() = prefs.getString("translation_endpoint", "https://libretranslate.com/translate") ?: "https://libretranslate.com/translate"
         set(value) = prefs.edit().putString("translation_endpoint", value).apply()
+
+    var writingToolsEnabled: Boolean
+        get() = prefs.getBoolean("writing_tools_enabled", true)
+        set(value) = prefs.edit().putBoolean("writing_tools_enabled", value).apply()
+
+    var dictationAutoPunctuation: Boolean
+        get() = prefs.getBoolean("dictation_auto_punctuation", true)
+        set(value) = prefs.edit().putBoolean("dictation_auto_punctuation", value).apply()
+
+    var inlinePredictionsEnabled: Boolean
+        get() = prefs.getBoolean("inline_predictions_enabled", true)
+        set(value) = prefs.edit().putBoolean("inline_predictions_enabled", value).apply()
 }

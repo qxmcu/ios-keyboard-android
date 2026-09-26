@@ -17,6 +17,8 @@ import androidx.core.view.WindowInsetsCompat
 import org.iosclone.keyboard.audio.AudioHapticFeedback
 import org.iosclone.keyboard.audio.SoundType
 import org.iosclone.keyboard.clipboard.ClipboardManagerHelper
+import org.iosclone.keyboard.dictation.DictationOverlayView
+import org.iosclone.keyboard.dictation.VoiceDictationEngine
 import org.iosclone.keyboard.dictionary.DictionaryEngine
 import org.iosclone.keyboard.dictionary.Trie
 import org.iosclone.keyboard.layout.KeyDefinition
@@ -37,6 +39,7 @@ import org.iosclone.keyboard.view.EmojiPickerView
 import org.iosclone.keyboard.view.IOSKeyboardView
 import org.iosclone.keyboard.view.SuggestionStripView
 import org.iosclone.keyboard.view.TranslationBarView
+import org.iosclone.keyboard.writingtools.WritingToolsBottomSheet
 
 class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
 
@@ -47,6 +50,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     private lateinit var clipboardHelper: ClipboardManagerHelper
     private lateinit var translationEngine: TranslationEngine
     private lateinit var inlineTranslator: InlineTranslator
+    private lateinit var voiceDictationEngine: VoiceDictationEngine
 
     // Views
     private var rootLayout: LinearLayout? = null
@@ -56,6 +60,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     private var keyboardView: IOSKeyboardView? = null
     private var emojiPickerView: EmojiPickerView? = null
     private var clipboardDrawerView: ClipboardDrawerView? = null
+    private var dictationOverlayView: DictationOverlayView? = null
 
     // State
     private var currentMode = KeyboardMode.LOWERCASE
@@ -78,6 +83,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         clipboardHelper = ClipboardManagerHelper(this)
         translationEngine = TranslationEngine()
         inlineTranslator = InlineTranslator(translationEngine)
+        voiceDictationEngine = VoiceDictationEngine(this)
 
         currentLanguage = preferences.activeLanguage
         dictionaryEngine.setLanguage(currentLanguage)
@@ -88,6 +94,50 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 if (preferences.clipboardAutoSuggest) {
                     suggestionStripView?.showQuickPaste(clip)
                 }
+            }
+        }
+
+        // Voice Dictation callbacks
+        voiceDictationEngine.onTextRecognized = { spokenText ->
+            currentInputConnection?.commitText(spokenText + " ", 1)
+            updateNextWordPredictions()
+        }
+        voiceDictationEngine.onCommandRecognized = { command ->
+            when (command) {
+                VoiceDictationEngine.VoiceCommand.DELETE_LAST_WORD -> {
+                    val ic = currentInputConnection
+                    val before = ic?.getTextBeforeCursor(50, 0)?.toString() ?: ""
+                    val lastWord = before.trimEnd().substringAfterLast(' ', "")
+                    if (lastWord.isNotEmpty()) {
+                        ic?.deleteSurroundingText(lastWord.length + 1, 0)
+                    }
+                }
+                VoiceDictationEngine.VoiceCommand.SELECT_ALL -> {
+                    currentInputConnection?.performContextMenuAction(android.R.id.selectAll)
+                }
+                VoiceDictationEngine.VoiceCommand.CLEAR_ALL -> {
+                    currentInputConnection?.performContextMenuAction(android.R.id.selectAll)
+                    currentInputConnection?.commitText("", 1)
+                }
+                VoiceDictationEngine.VoiceCommand.NEW_LINE -> {
+                    currentInputConnection?.commitText("\n", 1)
+                }
+                VoiceDictationEngine.VoiceCommand.NEW_PARAGRAPH -> {
+                    currentInputConnection?.commitText("\n\n", 1)
+                }
+                VoiceDictationEngine.VoiceCommand.STOP -> {
+                    dictationOverlayView?.visibility = View.GONE
+                    keyboardView?.visibility = View.VISIBLE
+                }
+            }
+        }
+        voiceDictationEngine.onAudioLevelChanged = { rms ->
+            dictationOverlayView?.setAudioLevel(rms)
+        }
+        voiceDictationEngine.onDictationStateChanged = { listening ->
+            if (!listening) {
+                dictationOverlayView?.visibility = View.GONE
+                keyboardView?.visibility = View.VISIBLE
             }
         }
     }
@@ -115,6 +165,27 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             onQuickPasteSelected = { pasteText ->
                 currentInputConnection?.commitText(pasteText, 1)
                 showQuickPaste(null)
+            }
+            onWritingToolsRequested = {
+                val anchor = rootLayout ?: this
+                val textBefore = currentInputConnection?.getTextBeforeCursor(300, 0)?.toString() ?: ""
+                val selectedText = currentInputConnection?.getSelectedText(0)?.toString() ?: ""
+                val textToProcess = if (selectedText.isNotBlank()) selectedText else textBefore.takeLast(160).trim()
+
+                WritingToolsBottomSheet(
+                    context = this@IOSInputMethodService,
+                    theme = currentTheme,
+                    currentText = textToProcess
+                ) { replacement ->
+                    if (selectedText.isNotBlank()) {
+                        currentInputConnection?.commitText(replacement, 1)
+                    } else if (textToProcess.isNotEmpty()) {
+                        currentInputConnection?.deleteSurroundingText(textToProcess.length, 0)
+                        currentInputConnection?.commitText(replacement, 1)
+                    }
+                    wordBuffer.clear()
+                    updateNextWordPredictions()
+                }.show(anchor)
             }
         }
         rootLayout?.addView(suggestionStripView)
@@ -145,7 +216,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             translationBarView?.setTranslationPreview(translated)
         }
 
-        // 3. Content Container (Switches between Main Keyboard, Emoji, Clipboard)
+        // 3. Content Container (Switches between Main Keyboard, Emoji, Clipboard, Dictation)
         contentContainer = FrameLayout(this).apply {
             layoutParams = LinearLayout.LayoutParams(
                 LinearLayout.LayoutParams.MATCH_PARENT,
@@ -208,6 +279,21 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             }
         }
         contentContainer?.addView(clipboardDrawerView)
+
+        // 7. Dictation Overlay View
+        dictationOverlayView = DictationOverlayView(this).apply {
+            visibility = View.GONE
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.MATCH_PARENT,
+                (240 * density).toInt()
+            )
+            onDoneClicked = {
+                voiceDictationEngine.stopListening()
+                visibility = View.GONE
+                keyboardView?.visibility = View.VISIBLE
+            }
+        }
+        contentContainer?.addView(dictationOverlayView)
 
         rootLayout?.addView(contentContainer)
 
@@ -282,6 +368,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         applyCurrentTheme()
         updateKeyboardLayout()
         showMainKeyboard()
+        updateNextWordPredictions()
     }
 
     private fun applyBottomInsets(insets: WindowInsetsCompat) {
@@ -309,6 +396,14 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             drawer.setPadding(0, 0, 0, bottomInset)
             drawer.requestLayout()
         }
+
+        dictationOverlayView?.let { overlay ->
+            overlay.layoutParams = (overlay.layoutParams as? FrameLayout.LayoutParams)?.apply {
+                height = (240 * density).toInt() + bottomInset
+            } ?: FrameLayout.LayoutParams(FrameLayout.LayoutParams.MATCH_PARENT, (240 * density).toInt() + bottomInset)
+            overlay.setPadding(0, 0, 0, bottomInset)
+            overlay.requestLayout()
+        }
     }
 
     private fun applyCurrentTheme() {
@@ -318,6 +413,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         translationBarView?.applyTheme(currentTheme)
         emojiPickerView?.applyTheme(currentTheme)
         clipboardDrawerView?.applyTheme(currentTheme)
+        dictationOverlayView?.applyTheme(currentTheme)
     }
 
     private fun updateKeyboardLayout() {
@@ -334,30 +430,23 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         keyboardView?.visibility = View.VISIBLE
         emojiPickerView?.visibility = View.GONE
         clipboardDrawerView?.visibility = View.GONE
+        dictationOverlayView?.visibility = View.GONE
         suggestionStripView?.visibility = View.VISIBLE
     }
 
     private fun showEmojiPicker() {
         keyboardView?.visibility = View.GONE
         clipboardDrawerView?.visibility = View.GONE
+        dictationOverlayView?.visibility = View.GONE
         emojiPickerView?.visibility = View.VISIBLE
     }
 
     private fun showClipboardDrawer() {
         keyboardView?.visibility = View.GONE
         emojiPickerView?.visibility = View.GONE
+        dictationOverlayView?.visibility = View.GONE
         clipboardDrawerView?.refreshClips()
         clipboardDrawerView?.visibility = View.VISIBLE
-    }
-
-    private fun toggleTranslationBar() {
-        val bar = translationBarView ?: return
-        if (bar.visibility == View.VISIBLE) {
-            bar.visibility = View.GONE
-        } else {
-            bar.visibility = View.VISIBLE
-            inlineTranslator.onTextChanged(wordBuffer.toString())
-        }
     }
 
     // KeyboardActionListener Callbacks
@@ -375,30 +464,37 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                     lastSpacePressTime = 0
                     currentMode = KeyboardMode.UPPERCASE
                     updateKeyboardLayout()
+                    updateNextWordPredictions()
                     return
                 }
                 lastSpacePressTime = now
 
+                val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
+                val previousWords = extractPreviousWords(textBefore)
+
                 // Check Autocorrect on space
                 if (preferences.autocorrectEnabled && wordBuffer.isNotEmpty()) {
-                    val result = dictionaryEngine.getSuggestions(wordBuffer.toString(), true)
-                    if (result.centerCandidate.isNotEmpty() && !result.centerCandidate.equals(wordBuffer.toString(), ignoreCase = true)) {
+                    val typed = wordBuffer.toString()
+                    val result = dictionaryEngine.getSuggestions(typed, previousWords, true)
+                    if (result.isAutocorrectCandidate && result.centerCandidate.isNotEmpty() && !result.centerCandidate.equals(typed, ignoreCase = true)) {
                         // Replace misspelled word with autocorrect candidate!
-                        ic.deleteSurroundingText(wordBuffer.length, 0)
+                        ic.deleteSurroundingText(typed.length, 0)
                         ic.commitText(result.centerCandidate + " ", 1)
-                        dictionaryEngine.learnWord(result.centerCandidate)
+                        dictionaryEngine.undoManager.recordReplacement(typed, result.centerCandidate)
+                        dictionaryEngine.onWordCommitted(result.centerCandidate, previousWords.lastOrNull())
                         wordBuffer.clear()
-                        suggestionStripView?.clearSuggestions()
+                        updateNextWordPredictions()
                         return
                     }
                 }
 
                 if (wordBuffer.isNotEmpty()) {
-                    dictionaryEngine.learnWord(wordBuffer.toString())
+                    val typed = wordBuffer.toString()
+                    dictionaryEngine.onWordCommitted(typed, previousWords.lastOrNull())
                 }
                 ic.commitText(" ", 1)
                 wordBuffer.clear()
-                suggestionStripView?.clearSuggestions()
+                updateNextWordPredictions()
             }
 
             KeyType.RETURN -> {
@@ -413,16 +509,16 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             }
 
             KeyType.DICTATION -> {
-                // Launch voice dictation intent or settings
-                try {
-                    val intent = Intent(android.speech.RecognizerIntent.ACTION_RECOGNIZE_SPEECH)
-                    intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    startActivity(intent)
-                } catch (e: Exception) {
-                    // Open settings if speech recognition activity unavailable
-                    val settingsIntent = Intent(this, SettingsActivity::class.java)
-                    settingsIntent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
-                    startActivity(settingsIntent)
+                if (voiceDictationEngine.isListening) {
+                    voiceDictationEngine.stopListening()
+                    dictationOverlayView?.visibility = View.GONE
+                    keyboardView?.visibility = View.VISIBLE
+                } else {
+                    keyboardView?.visibility = View.GONE
+                    emojiPickerView?.visibility = View.GONE
+                    clipboardDrawerView?.visibility = View.GONE
+                    dictationOverlayView?.visibility = View.VISIBLE
+                    voiceDictationEngine.startListening(currentLanguage.localeCode)
                 }
             }
 
@@ -434,7 +530,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         val ic = currentInputConnection ?: return
         ic.commitText(text, 1)
 
-        if (text.length == 1 && text[0].isLetter()) {
+        if (text.length == 1 && (text[0].isLetter() || text[0] == '\'')) {
             wordBuffer.append(text)
             updateSuggestions()
             inlineTranslator.onTextChanged(wordBuffer.toString())
@@ -446,12 +542,27 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             }
         } else {
             wordBuffer.clear()
-            suggestionStripView?.clearSuggestions()
+            updateNextWordPredictions()
         }
     }
 
     override fun onDelete() {
         val ic = currentInputConnection ?: return
+        val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
+
+        // Signature iOS feature: Undo Autocorrect on immediate backspace!
+        val undoRecord = dictionaryEngine.undoManager.shouldUndoOnDelete(textBefore)
+        if (undoRecord != null) {
+            val replacedWithSpace = undoRecord.autocorrectedTo + " "
+            val len = if (textBefore.endsWith(replacedWithSpace)) replacedWithSpace.length else undoRecord.autocorrectedTo.length
+            ic.deleteSurroundingText(len, 0)
+            ic.commitText(undoRecord.originalTyped, 1)
+            wordBuffer.clear()
+            wordBuffer.append(undoRecord.originalTyped)
+            updateSuggestions()
+            return
+        }
+
         ic.deleteSurroundingText(1, 0)
 
         if (wordBuffer.isNotEmpty()) {
@@ -459,7 +570,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             updateSuggestions()
             inlineTranslator.onTextChanged(wordBuffer.toString())
         } else {
-            suggestionStripView?.clearSuggestions()
+            updateNextWordPredictions()
         }
     }
 
@@ -468,7 +579,6 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         currentMode = when (currentMode) {
             KeyboardMode.LOWERCASE -> KeyboardMode.UPPERCASE
             KeyboardMode.UPPERCASE -> {
-                // Double tap shift triggers caps lock
                 if (now - lastShiftPressTime < 300) {
                     KeyboardMode.CAPS_LOCK
                 } else {
@@ -525,9 +635,11 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         val topWord = candidates.first()
         val ic = currentInputConnection ?: return
         ic.commitText(topWord + " ", 1)
-        dictionaryEngine.learnWord(topWord)
+        val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
+        val previousWords = extractPreviousWords(textBefore)
+        dictionaryEngine.onWordCommitted(topWord, previousWords.dropLast(1).lastOrNull())
         wordBuffer.clear()
-        suggestionStripView?.clearSuggestions()
+        updateNextWordPredictions()
     }
 
     override fun getDictionaryTrie(): Trie? {
@@ -540,25 +652,58 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             ic.deleteSurroundingText(wordBuffer.length, 0)
         }
         ic.commitText(candidate + " ", 1)
-        dictionaryEngine.learnWord(candidate)
+        val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
+        val previousWords = extractPreviousWords(textBefore)
+        dictionaryEngine.onWordCommitted(candidate, previousWords.dropLast(1).lastOrNull())
         wordBuffer.clear()
-        suggestionStripView?.clearSuggestions()
+        updateNextWordPredictions()
     }
 
     private fun updateSuggestions() {
         if (!preferences.predictiveTextEnabled || wordBuffer.isEmpty()) {
-            suggestionStripView?.clearSuggestions()
+            updateNextWordPredictions()
             return
         }
+        val ic = currentInputConnection ?: return
+        val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
+        val previousWords = extractPreviousWords(textBefore)
         val result = dictionaryEngine.getSuggestions(
             rawInput = wordBuffer.toString(),
+            previousWords = previousWords,
             autocorrectEnabled = preferences.autocorrectEnabled
         )
         suggestionStripView?.setSuggestions(result)
     }
 
+    private fun updateNextWordPredictions() {
+        if (!preferences.predictiveTextEnabled) {
+            suggestionStripView?.clearSuggestions()
+            return
+        }
+        val ic = currentInputConnection ?: return
+        val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
+        val previousWords = extractPreviousWords(textBefore)
+        if (previousWords.isNotEmpty()) {
+            val nextResult = dictionaryEngine.getSuggestions(
+                rawInput = "",
+                previousWords = previousWords,
+                autocorrectEnabled = preferences.autocorrectEnabled
+            )
+            suggestionStripView?.setSuggestions(nextResult)
+        } else {
+            suggestionStripView?.clearSuggestions()
+        }
+    }
+
+    private fun extractPreviousWords(text: String): List<String> {
+        return text.split(Regex("[^a-zA-Z'0-9]+"))
+            .filter { it.isNotBlank() }
+            .takeLast(4)
+    }
+
     override fun onDestroy() {
         clipboardHelper.stopListening()
+        voiceDictationEngine.destroy()
         audioHapticFeedback.release()
         super.onDestroy()
     }

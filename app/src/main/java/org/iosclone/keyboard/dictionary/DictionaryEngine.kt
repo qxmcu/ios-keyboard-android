@@ -10,11 +10,20 @@ import org.iosclone.keyboard.layout.LanguageLayout
 import java.io.BufferedReader
 import java.io.InputStreamReader
 
+/**
+ * Intelligent, low-latency Autocorrect & QuickType Engine for iOS 27 Keyboard.
+ * Combines quantized n-gram language model, spatial key distance matrix,
+ * contraction expansion, predictive emojis, and dynamic user learning.
+ */
 class DictionaryEngine(private val context: Context) {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Default)
     private val tries = mutableMapOf<LanguageLayout, Trie>()
     private val userDb = UserDictionaryDb(context)
+
+    val languageModel = QuantizedLanguageModel()
+    val textReplacementManager = TextReplacementManager(context)
+    val undoManager = AutocorrectUndoManager()
 
     private var currentLanguage: LanguageLayout = LanguageLayout.QWERTY
 
@@ -72,11 +81,67 @@ class DictionaryEngine(private val context: Context) {
     }
 
     /**
-     * Resolves predictions and autocorrection for the current typed word.
+     * Resolves predictions and autocorrection for the current typed word and context.
+     * @param rawInput The word currently being typed (can be empty after space).
+     * @param previousWords Recent words in the sentence for n-gram context.
+     * @param autocorrectEnabled Preference flag.
      */
-    fun getSuggestions(rawInput: String, autocorrectEnabled: Boolean): AutocorrectResult {
+    fun getSuggestions(
+        rawInput: String,
+        previousWords: List<String> = emptyList(),
+        autocorrectEnabled: Boolean = true
+    ): AutocorrectResult {
+        val prevWord = previousWords.lastOrNull()?.trim()
+
+        // 1. Next-word prediction when rawInput is empty (e.g. right after a space)
         if (rawInput.isBlank()) {
-            return AutocorrectResult.Empty
+            if (previousWords.isEmpty()) return AutocorrectResult.Empty
+
+            val nextPredictions = languageModel.predictNextWords(previousWords, limit = 3)
+            val suggestedEmoji = if (prevWord != null) PredictiveEmojiEngine.getSuggestedEmojis(prevWord)?.firstOrNull() else null
+
+            val left = nextPredictions.getOrNull(0) ?: ""
+            val center = nextPredictions.getOrNull(1) ?: ""
+            val right = suggestedEmoji ?: nextPredictions.getOrNull(2) ?: ""
+
+            return AutocorrectResult(
+                centerCandidate = center,
+                leftCandidate = left,
+                rightCandidate = right,
+                isExactMatch = true,
+                rawTypedWord = "",
+                isAutocorrectCandidate = false,
+                suggestedEmoji = suggestedEmoji
+            )
+        }
+
+        // 2. Check Text Replacement Shortcuts (e.g. "omw" -> "On my way!")
+        val shortcutReplacement = textReplacementManager.getReplacement(rawInput)
+        if (shortcutReplacement != null) {
+            return AutocorrectResult(
+                centerCandidate = shortcutReplacement,
+                leftCandidate = rawInput,
+                rightCandidate = "",
+                isExactMatch = false,
+                rawTypedWord = rawInput,
+                isAutocorrectCandidate = true,
+                shortcutReplacement = shortcutReplacement
+            )
+        }
+
+        // 3. Check Contractions & Common Phonetic Misspellings ("dont" -> "don't", "teh" -> "the")
+        val contractionFix = ContractionFixer.getFix(rawInput)
+        if (contractionFix != null && autocorrectEnabled && !undoManager.isIgnored(rawInput)) {
+            val emoji = PredictiveEmojiEngine.getSuggestedEmojis(contractionFix)?.firstOrNull()
+            return AutocorrectResult(
+                centerCandidate = contractionFix,
+                leftCandidate = rawInput,
+                rightCandidate = emoji ?: "",
+                isExactMatch = false,
+                rawTypedWord = rawInput,
+                isAutocorrectCandidate = true,
+                suggestedEmoji = emoji
+            )
         }
 
         val trie = synchronized(tries) { tries[currentLanguage] } ?: return AutocorrectResult(
@@ -93,21 +158,35 @@ class DictionaryEngine(private val context: Context) {
 
         val isExact = trie.contains(lowerInput)
 
-        val isAutocorrectViable = !isExact && autocorrectEnabled && rawInput.length >= 2
+        // 4. Prefix matches
+        val prefixMatches = trie.findPrefixSuggestions(lowerInput, limit = 8)
 
-        // 1. Prefix matches
-        val prefixMatches = trie.findPrefixSuggestions(lowerInput, limit = 5)
-
-        // 2. Fuzzy matches if no prefix matches or not exact and autocorrect enabled
-        val candidates = if (prefixMatches.isNotEmpty()) {
-            prefixMatches.map { it.first }
-        } else if (isAutocorrectViable) {
-            trie.searchFuzzy(lowerInput, maxCost = 2, limit = 5).map { it.first }
+        // 5. Spatial-distance scored fuzzy candidates
+        val fuzzyMatches = if (!isExact && autocorrectEnabled && rawInput.length >= 2 && !undoManager.isIgnored(rawInput)) {
+            trie.searchFuzzy(lowerInput, maxCost = 2, limit = 8)
         } else {
             emptyList()
         }
 
-        // Format casing to match user input
+        // Combine and score candidates with Language Model + Spatial Proximity
+        data class ScoredCandidate(val word: String, val score: Float)
+
+        val candidatePool = (prefixMatches + fuzzyMatches).distinctBy { it.first }
+        val scoredList = candidatePool.map { (word, freq) ->
+            val spatialDist = SpatialKeyDistance.spatialDistance(lowerInput, word)
+            val contextScore = languageModel.getContextScore(word, prevWord)
+            val isPrefix = word.startsWith(lowerInput)
+
+            // Weight calculation:
+            // High frequency + high context boost - spatial penalty
+            var score = (freq * 0.35f) + (contextScore * 0.5f) - (spatialDist * 85f)
+            if (isPrefix) score += 60f
+            if (word.equals(lowerInput, ignoreCase = true)) score += 500f
+
+            ScoredCandidate(word, score)
+        }.sortedByDescending { it.score }
+
+        // Format casing
         fun applyCasing(word: String): String {
             return when {
                 isAllUpper -> word.uppercase()
@@ -116,30 +195,42 @@ class DictionaryEngine(private val context: Context) {
             }
         }
 
-        val formattedCandidates = candidates.map { applyCasing(it) }
+        val topWord = scoredList.firstOrNull()?.word?.let { applyCasing(it) }
+        val secondWord = scoredList.getOrNull(1)?.word?.let { applyCasing(it) }
+        val thirdWord = scoredList.getOrNull(2)?.word?.let { applyCasing(it) }
+
+        // Predictive Emoji match
+        val emojiMatch = PredictiveEmojiEngine.getSuggestedEmojis(topWord ?: rawInput)?.firstOrNull()
 
         val centerCandidate: String
         val leftCandidate: String
         val rightCandidate: String
+        val willAutocorrect: Boolean
 
         if (isExact) {
             centerCandidate = rawInput
-            leftCandidate = formattedCandidates.getOrNull(0)?.takeIf { !it.equals(rawInput, ignoreCase = true) }
-                ?: formattedCandidates.getOrNull(1) ?: ""
-            rightCandidate = formattedCandidates.getOrNull(1)?.takeIf { !it.equals(rawInput, ignoreCase = true) && !it.equals(leftCandidate, ignoreCase = true) }
-                ?: formattedCandidates.getOrNull(2) ?: ""
+            leftCandidate = secondWord?.takeIf { !it.equals(rawInput, ignoreCase = true) } ?: ""
+            rightCandidate = emojiMatch ?: thirdWord?.takeIf { !it.equals(rawInput, ignoreCase = true) && !it.equals(leftCandidate, ignoreCase = true) } ?: ""
+            willAutocorrect = false
         } else {
-            // Autocorrect kicks in for center candidate if autocorrect is enabled and viable
-            val topSuggested = formattedCandidates.firstOrNull()
-            if (isAutocorrectViable && topSuggested != null) {
-                centerCandidate = topSuggested
-                leftCandidate = rawInput // Left column shows verbatim what user typed in iOS
-                rightCandidate = formattedCandidates.getOrNull(1) ?: ""
+            if (autocorrectEnabled && topWord != null && !topWord.equals(rawInput, ignoreCase = true) && !undoManager.isIgnored(rawInput)) {
+                centerCandidate = topWord
+                leftCandidate = rawInput // In iOS, verbatim typed word is on the left
+                rightCandidate = emojiMatch ?: secondWord ?: ""
+                willAutocorrect = true
             } else {
                 centerCandidate = rawInput
-                leftCandidate = formattedCandidates.getOrNull(0) ?: ""
-                rightCandidate = formattedCandidates.getOrNull(1) ?: ""
+                leftCandidate = topWord ?: ""
+                rightCandidate = emojiMatch ?: secondWord ?: ""
+                willAutocorrect = false
             }
+        }
+
+        // Inline ghost text prediction
+        val inlinePrediction = if (topWord != null && topWord.lowercase().startsWith(lowerInput) && topWord.length > rawInput.length) {
+            topWord.substring(rawInput.length)
+        } else {
+            null
         }
 
         return AutocorrectResult(
@@ -147,20 +238,26 @@ class DictionaryEngine(private val context: Context) {
             leftCandidate = leftCandidate,
             rightCandidate = rightCandidate,
             isExactMatch = isExact,
-            rawTypedWord = rawInput
+            rawTypedWord = rawInput,
+            isAutocorrectCandidate = willAutocorrect,
+            suggestedEmoji = emojiMatch,
+            inlinePrediction = inlinePrediction
         )
     }
 
     /**
-     * Learns a newly committed word in user dictionary
+     * Learns words and bigram associations from committed text.
      */
-    fun learnWord(word: String) {
+    fun onWordCommitted(word: String, previousWord: String? = null) {
         val trimmed = word.trim()
-        if (trimmed.length in 2..32 && trimmed.all { it.isLetter() }) {
+        if (trimmed.length in 2..32 && trimmed.all { it.isLetter() || it == '\'' }) {
             scope.launch(Dispatchers.IO) {
                 userDb.insertOrIncrementWord(trimmed, currentLanguage.name)
                 synchronized(tries) {
-                    tries[currentLanguage]?.insert(trimmed.lowercase(), 100)
+                    tries[currentLanguage]?.insert(trimmed.lowercase(), 120)
+                }
+                if (previousWord != null && previousWord.isNotBlank()) {
+                    languageModel.learnBigram(previousWord, trimmed)
                 }
             }
         }

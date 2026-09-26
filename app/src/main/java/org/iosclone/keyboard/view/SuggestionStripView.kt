@@ -26,6 +26,7 @@ class SuggestionStripView @JvmOverloads constructor(
     private val rightCandidateTv: TextView
     private val sep1: View
     private val sep2: View
+    private val writingToolsBtn: TextView
     private val dividerPaint = Paint().apply {
         strokeWidth = 1f
     }
@@ -36,6 +37,7 @@ class SuggestionStripView @JvmOverloads constructor(
 
     var onCandidateSelected: ((String) -> Unit)? = null
     var onQuickPasteSelected: ((String) -> Unit)? = null
+    var onWritingToolsRequested: (() -> Unit)? = null
 
     private var currentQuickPasteText: String? = null
     private var currentTheme: ThemeColors = ThemeColors.Light
@@ -45,11 +47,11 @@ class SuggestionStripView @JvmOverloads constructor(
         setWillNotDraw(false)
         orientation = HORIZONTAL
         gravity = Gravity.CENTER_VERTICAL
-        val pad = (4 * resources.displayMetrics.density).toInt()
+        val density = resources.displayMetrics.density
+        val pad = (4 * density).toInt()
         setPadding(pad, 0, pad, 0)
 
         // Quick paste chip container
-        val density = resources.displayMetrics.density
         quickPasteContainer = LinearLayout(context).apply {
             orientation = HORIZONTAL
             gravity = Gravity.CENTER_VERTICAL
@@ -86,6 +88,25 @@ class SuggestionStripView @JvmOverloads constructor(
             currentQuickPasteText?.let { onQuickPasteSelected?.invoke(it) }
         }
         addView(quickPasteContainer)
+
+        // Apple Intelligence Sparkle ✨ Button
+        writingToolsBtn = TextView(context).apply {
+            text = "✨"
+            textSize = 15f
+            gravity = Gravity.CENTER
+            val size = (32 * density).toInt()
+            layoutParams = LayoutParams(size, size).apply {
+                marginEnd = (4 * density).toInt()
+            }
+            background = GradientDrawable().apply {
+                setColor(if (currentTheme.isDark) 0x22FFFFFF else 0x14000000)
+                cornerRadius = 16f * density
+            }
+            setOnClickListener {
+                onWritingToolsRequested?.invoke()
+            }
+        }
+        addView(writingToolsBtn)
 
         // Candidates row takes 100% available width
         val candidatesLayout = LinearLayout(context).apply {
@@ -155,6 +176,12 @@ class SuggestionStripView @JvmOverloads constructor(
         sep2.setBackgroundColor(sepColor)
         dividerPaint.color = if (theme.isDark) 0x2EFFFFFF.toInt() else 0x1F000000
 
+        val density = resources.displayMetrics.density
+        writingToolsBtn.background = GradientDrawable().apply {
+            setColor(if (theme.isDark) 0x22FFFFFF else 0x14000000)
+            cornerRadius = 16f * density
+        }
+
         updateCenterHighlight()
         invalidate()
     }
@@ -173,15 +200,19 @@ class SuggestionStripView @JvmOverloads constructor(
 
     fun setSuggestions(result: AutocorrectResult) {
         val center = result.centerCandidate
-        isAutocorrectActive = !result.isExactMatch && center.isNotEmpty() && !center.equals(result.rawTypedWord, ignoreCase = true)
+        isAutocorrectActive = result.isAutocorrectCandidate ||
+            (!result.isExactMatch && center.isNotEmpty() && !center.equals(result.rawTypedWord, ignoreCase = true))
 
         centerCandidateTv.text = if (isAutocorrectActive) "\"$center\"" else center
         leftCandidateTv.text = result.leftCandidate
-        rightCandidateTv.text = result.rightCandidate
+
+        val rightText = result.suggestedEmoji ?: result.rightCandidate
+        rightCandidateTv.text = rightText
+        rightCandidateTv.textSize = if (result.suggestedEmoji != null) 20f else 14.5f
 
         val hasLeft = result.leftCandidate.isNotBlank()
         val hasCenter = center.isNotBlank()
-        val hasRight = result.rightCandidate.isNotBlank()
+        val hasRight = rightText.isNotBlank()
 
         sep1.visibility = if (hasLeft && hasCenter) View.VISIBLE else View.GONE
         sep2.visibility = if (hasCenter && hasRight) View.VISIBLE else View.GONE

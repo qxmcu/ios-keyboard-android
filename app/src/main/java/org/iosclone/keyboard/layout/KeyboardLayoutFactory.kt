@@ -52,6 +52,10 @@ object KeyboardLayoutFactory {
             LanguageLayout.SPANISH -> Triple("qwertyuiop", "asdfghjklñ", "zxcvbnm")
             LanguageLayout.CYRILLIC -> Triple("йцукенгшщзхъ", "фывапролджэ", "ячсмитьбю")
             LanguageLayout.ARABIC -> Triple("ضصثقفغعهخحج", "شسيبلاتنمكط", "ئءؤرلاىةوزظ")
+            LanguageLayout.HINDI -> Triple("ौैाीूबहकदग", "ोे्िुपरकतच", "ंमणनवलशषस")
+            LanguageLayout.CHINESE_PINYIN, LanguageLayout.JAPANESE -> Triple("qwertyuiop", "asdfghjkl", "zxcvbnm")
+            LanguageLayout.KOREAN -> Triple("ㅂㅈㄷㄱㅅㅛㅕㅑㅐㅔ", "ㅁㄴㅇㄹㅎㅗㅓㅏㅣ", "ㅋㅌㅊㅍㅠㅜㅡ")
+            LanguageLayout.THAI -> Triple("ๆไำพะัีรนยบล", "ฟหกดเ้่าสวง", "ผปแอิืทมใฝ")
         }
 
         val row1 = row1Chars.map { c ->

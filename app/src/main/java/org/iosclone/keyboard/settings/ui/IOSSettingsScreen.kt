@@ -62,6 +62,9 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
     var gestureTyping by remember { mutableStateOf(prefs.gestureTypingEnabled) }
     var doubleSpacePeriod by remember { mutableStateOf(prefs.doubleSpacePeriodEnabled) }
     var spacebarTrackpad by remember { mutableStateOf(prefs.spacebarTrackpadEnabled) }
+    var writingTools by remember { mutableStateOf(prefs.writingToolsEnabled) }
+    var dictationAutoPunctuation by remember { mutableStateOf(prefs.dictationAutoPunctuation) }
+    var inlinePredictions by remember { mutableStateOf(prefs.inlinePredictionsEnabled) }
 
     var activeLanguage by remember { mutableStateOf(prefs.activeLanguage) }
 
@@ -262,6 +265,44 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                     onCheckedChange = {
                         spacebarTrackpad = it
                         prefs.spacebarTrackpadEnabled = it
+                    }
+                )
+                IOSSettingsToggleRow(
+                    title = "Inline Predictions",
+                    subtitle = "Suggest word completions inline while typing",
+                    checked = inlinePredictions,
+                    onCheckedChange = {
+                        inlinePredictions = it
+                        prefs.inlinePredictionsEnabled = it
+                    }
+                )
+                IOSSettingsToggleRow(
+                    title = "Apple Intelligence Writing Tools",
+                    subtitle = "On-device proofreading, tone rewriting, and Genmoji",
+                    checked = writingTools,
+                    onCheckedChange = {
+                        writingTools = it
+                        prefs.writingToolsEnabled = it
+                    }
+                )
+                IOSSettingsToggleRow(
+                    title = "Dictation Auto-Punctuation",
+                    subtitle = "Automatically insert punctuation while speaking",
+                    checked = dictationAutoPunctuation,
+                    onCheckedChange = {
+                        dictationAutoPunctuation = it
+                        prefs.dictationAutoPunctuation = it
+                    }
+                )
+                IOSSettingsActionRow(
+                    title = "Text Replacement",
+                    trailingText = "Shortcuts",
+                    onClick = {
+                        AlertDialog.Builder(context)
+                            .setTitle("Text Replacement")
+                            .setMessage("Shortcuts like 'omw' expand into 'On my way!' automatically upon pressing space.")
+                            .setPositiveButton("OK", null)
+                            .show()
                     },
                     showDivider = false
                 )

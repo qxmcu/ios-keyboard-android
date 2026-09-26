@@ -63,7 +63,11 @@ class IOSContextMenu(
             LanguageLayout.QWERTY,
             LanguageLayout.SPANISH,
             LanguageLayout.AZERTY,
-            LanguageLayout.QWERTZ
+            LanguageLayout.QWERTZ,
+            LanguageLayout.ARABIC,
+            LanguageLayout.HINDI,
+            LanguageLayout.CHINESE_PINYIN,
+            LanguageLayout.JAPANESE
         )
 
         for (lang in supportedLanguages) {
