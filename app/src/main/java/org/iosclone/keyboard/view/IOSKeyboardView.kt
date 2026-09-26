@@ -152,20 +152,33 @@ class IOSKeyboardView @JvmOverloads constructor(
     override fun onMeasure(widthMeasureSpec: Int, heightMeasureSpec: Int) {
         val width = MeasureSpec.getSize(widthMeasureSpec)
         val density = resources.displayMetrics.density
-        // iOS standard keyboard height: 216dp in portrait + bottom inset (min 40dp for floating buttons)
-        val effectiveBottomInset = bottomInset.coerceAtLeast(40f * density)
-        val baseHeight = (216f * density * preferences.keyboardHeightFactor) + effectiveBottomInset
+        val screenHeightDp = resources.configuration.screenHeightDp.toFloat()
+        val isLandscape = resources.configuration.orientation == android.content.res.Configuration.ORIENTATION_LANDSCAPE
+
+        // Adaptive row height: ergonomically scaled to device screen height (Samsung, Nothing, Pixel)
+        val targetRowHeight = when {
+            isLandscape -> (32f * density)
+            screenHeightDp > 850f -> (46f * density)  // Tall phones / Samsung Galaxy Ultra / Plus
+            screenHeightDp > 740f -> (43.5f * density) // Standard devices (Nothing Phone, Galaxy S, Pixel)
+            else -> (41f * density)                  // Compact screens
+        }
+
+        val verticalRowGap = if (isLandscape) (6f * density) else (10f * density)
+        val topPadding = 6f * density
+        val floatingBarHeight = if (isLandscape) 0f else (38f * density)
+        val totalKeysHeight = (targetRowHeight * 4) + (verticalRowGap * 3) + topPadding + (6f * density)
+
+        val baseHeight = (totalKeysHeight * preferences.keyboardHeightFactor) + floatingBarHeight + bottomInset
         val height = baseHeight.toInt()
         setMeasuredDimension(width, height)
 
-        layout?.measure(width.toFloat(), height.toFloat(), density, effectiveBottomInset)
+        layout?.measure(width.toFloat(), height.toFloat(), density, bottomInset)
     }
 
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         val density = resources.displayMetrics.density
-        val effectiveBottomInset = bottomInset.coerceAtLeast(40f * density)
-        layout?.measure(w.toFloat(), h.toFloat(), density, effectiveBottomInset)
+        layout?.measure(w.toFloat(), h.toFloat(), density, bottomInset)
     }
 
     override fun onDraw(canvas: Canvas) {

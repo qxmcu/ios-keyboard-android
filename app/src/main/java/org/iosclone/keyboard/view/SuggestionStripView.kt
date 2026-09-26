@@ -208,7 +208,16 @@ class SuggestionStripView @JvmOverloads constructor(
 
         val rightText = result.suggestedEmoji ?: result.rightCandidate
         rightCandidateTv.text = rightText
-        rightCandidateTv.textSize = if (result.suggestedEmoji != null) 20f else 14.5f
+        if (result.suggestedEmoji != null) {
+            rightCandidateTv.textSize = 20f
+            val tf = org.iosclone.keyboard.emoji.EmojiTextView.getBundledTypeface(context)
+            if (tf != null && tf != Typeface.DEFAULT) {
+                rightCandidateTv.typeface = tf
+            }
+        } else {
+            rightCandidateTv.textSize = 14.5f
+            rightCandidateTv.typeface = Typeface.DEFAULT
+        }
 
         val hasLeft = result.leftCandidate.isNotBlank()
         val hasCenter = center.isNotBlank()

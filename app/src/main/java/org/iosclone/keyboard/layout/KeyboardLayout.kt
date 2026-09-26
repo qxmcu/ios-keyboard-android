@@ -27,7 +27,8 @@ class KeyboardLayout(
 
     /**
      * Dynamically calculates bounds and touch targets for each key across all rows
-     * with authentic iOS proportions and alignment.
+     * with authentic iOS proportions, automatically adapting across all Android phone models
+     * (Nothing Phone, Samsung Galaxy S/A/Ultra/Fold, Google Pixel, etc.).
      */
     fun measure(
         viewWidth: Float,
@@ -37,15 +38,30 @@ class KeyboardLayout(
     ) {
         if (rows.isEmpty() || viewWidth <= 0 || viewHeight <= 0) return
 
-        val horizontalKeyGap = 6f * density
-        val verticalRowGap = 11f * density
-        val outerHorizontalMargin = 4f * density
-        val topPadding = 8f * density
-        val bottomPadding = 8f * density + bottomInset
+        val widthDp = viewWidth / density
+
+        // Adaptive gap & margin scaling based on screen width
+        val (horizontalKeyGap, outerHorizontalMargin) = when {
+            widthDp < 350f -> Pair(4.0f * density, 3.0f * density)  // Compact / Fold cover screen
+            widthDp < 400f -> Pair(5.5f * density, 4.0f * density)  // Standard phone (Nothing, Galaxy S24)
+            widthDp < 500f -> Pair(6.5f * density, 6.0f * density)  // Wide phone (Galaxy Ultra, Pro Max)
+            else -> Pair(8.0f * density, 12.0f * density)           // Tablet / Fold inner screen
+        }
+
+        val topPadding = 6f * density
+        val verticalRowGap = 10f * density
+
+        // Dedicated floating bottom bar height (sits ABOVE system navigation bar)
+        val floatingBarHeight = 38f * density
+        val bottomPadding = bottomInset + floatingBarHeight + (6f * density)
 
         val numRows = rows.size
-        val availableHeight = viewHeight - topPadding - bottomPadding - (verticalRowGap * (numRows - 1))
-        val rowHeight = (availableHeight / numRows).coerceAtLeast(38f * density)
+        val availableKeysHeight = viewHeight - topPadding - bottomPadding - (verticalRowGap * (numRows - 1))
+        val rowHeight = (availableKeysHeight / numRows).coerceIn(36f * density, 52f * density)
+
+        // Tablet / Foldable centering clamp (prevents awkward ultra-wide stretching)
+        val maxKeyboardWidth = if (widthDp > 520f) (480f * density) else viewWidth
+        val baseCenterOffset = (viewWidth - maxKeyboardWidth) / 2f
 
         // One-handed geometry calculation
         val oneHandedFactor = 0.82f
@@ -54,25 +70,25 @@ class KeyboardLayout(
 
         when (oneHandedMode) {
             OneHandedMode.NORMAL -> {
-                effectiveWidth = viewWidth
-                startXOffset = 0f
+                effectiveWidth = maxKeyboardWidth
+                startXOffset = baseCenterOffset
                 oneHandedSideButtonBounds.setEmpty()
             }
             OneHandedMode.LEFT_DOCKED -> {
-                effectiveWidth = viewWidth * oneHandedFactor
-                startXOffset = 0f
+                effectiveWidth = maxKeyboardWidth * oneHandedFactor
+                startXOffset = baseCenterOffset
                 oneHandedSideButtonBounds.set(
-                    effectiveWidth,
+                    baseCenterOffset + effectiveWidth,
                     topPadding,
-                    viewWidth,
+                    baseCenterOffset + maxKeyboardWidth,
                     viewHeight - bottomPadding
                 )
             }
             OneHandedMode.RIGHT_DOCKED -> {
-                effectiveWidth = viewWidth * oneHandedFactor
-                startXOffset = viewWidth - effectiveWidth
+                effectiveWidth = maxKeyboardWidth * oneHandedFactor
+                startXOffset = baseCenterOffset + (maxKeyboardWidth - effectiveWidth)
                 oneHandedSideButtonBounds.set(
-                    0f,
+                    baseCenterOffset,
                     topPadding,
                     startXOffset,
                     viewHeight - bottomPadding
@@ -151,12 +167,11 @@ class KeyboardLayout(
                         // Right modifier (Delete)
                         setKeyBounds(rightKey, currentX, currentY, modifierKeyWidth, rowHeight, horizontalKeyGap, verticalRowGap)
                     } else {
-                        // Fallback distribution
                         distributeRowEvenly(row, startXOffset + outerHorizontalMargin, currentY, totalRowWidth, rowHeight, horizontalKeyGap, verticalRowGap)
                     }
                 }
                 else -> {
-                    // Row 4: 123, Globe, Mic, Space, Return
+                    // Row 4: 123, Emoji, Space, Return
                     measureBottomRow(row, startXOffset + outerHorizontalMargin, currentY, totalRowWidth, rowHeight, baseKeyWidth, horizontalKeyGap, verticalRowGap)
                 }
             }
@@ -165,10 +180,10 @@ class KeyboardLayout(
         }
 
         // Measure floating bottom bar buttons (Globe on left, Dictation on right)
-        val bottomInsetArea = bottomPadding.coerceAtLeast(36f * density)
+        // Positioned cleanly in the floating bar ABOVE the system navigation bar
         val iconTouchW = 48f * density
         val iconTouchH = 40f * density
-        val bottomIconCenterY = viewHeight - (bottomInsetArea / 2f)
+        val bottomIconCenterY = viewHeight - bottomInset - (floatingBarHeight / 2f)
 
         val globeCenterX = startXOffset + outerHorizontalMargin + (22f * density)
         globeButtonBounds.set(
