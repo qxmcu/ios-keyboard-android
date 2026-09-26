@@ -3,6 +3,7 @@ package org.iosclone.keyboard.settings.ui
 import android.app.AlertDialog
 import android.content.Context
 import android.content.Intent
+import android.net.Uri
 import android.provider.Settings
 import android.view.inputmethod.InputMethodManager
 import android.widget.Toast
