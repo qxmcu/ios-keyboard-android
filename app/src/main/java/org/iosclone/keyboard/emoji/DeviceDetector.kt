@@ -14,9 +14,9 @@ object DeviceDetector {
      * Checks if the active device is a Nothing Phone (Phone 1, Phone 2, Phone 2a, Phone 2a Plus, CMF Phone 1).
      */
     fun isNothingPhone(): Boolean {
-        val m = Build.MANUFACTURER.lowercase()
-        val b = Build.BRAND.lowercase()
-        val model = Build.MODEL.lowercase()
+        val m = (Build.MANUFACTURER ?: "").lowercase()
+        val b = (Build.BRAND ?: "").lowercase()
+        val model = (Build.MODEL ?: "").lowercase()
         return m.contains("nothing") ||
                 b.contains("nothing") ||
                 model.contains("nothing") ||
@@ -31,8 +31,8 @@ object DeviceDetector {
      * Returns full user-friendly brand and OS name for settings and setup dialogs.
      */
     fun getBrandDisplayName(): String {
-        val m = Build.MANUFACTURER.lowercase()
-        val b = Build.BRAND.lowercase()
+        val m = (Build.MANUFACTURER ?: "").lowercase()
+        val b = (Build.BRAND ?: "").lowercase()
         return when {
             isNothingPhone() -> "Nothing Phone (Nothing OS)"
             m.contains("samsung") || b.contains("samsung") -> "Samsung Galaxy (One UI)"
@@ -44,7 +44,7 @@ object DeviceDetector {
             m.contains("google") || b.contains("google") -> "Google Pixel"
             m.contains("motorola") || b.contains("motorola") || m.contains("moto") -> "Motorola"
             m.contains("huawei") || b.contains("huawei") || m.contains("honor") || b.contains("honor") -> "Huawei / Honor"
-            else -> Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+            else -> Build.MANUFACTURER?.replaceFirstChar { it.uppercase() }?.takeIf { it.isNotBlank() } ?: "Android"
         }
     }
 
@@ -52,8 +52,8 @@ object DeviceDetector {
      * Returns compact brand name for keyboard chips and action buttons.
      */
     fun getShortBrandName(): String {
-        val m = Build.MANUFACTURER.lowercase()
-        val b = Build.BRAND.lowercase()
+        val m = (Build.MANUFACTURER ?: "").lowercase()
+        val b = (Build.BRAND ?: "").lowercase()
         return when {
             isNothingPhone() -> "Nothing Phone"
             m.contains("samsung") || b.contains("samsung") -> "Samsung"
@@ -64,7 +64,7 @@ object DeviceDetector {
             m.contains("vivo") || b.contains("vivo") || m.contains("iqoo") -> "Vivo"
             m.contains("google") || b.contains("google") -> "Pixel"
             m.contains("motorola") || b.contains("motorola") || m.contains("moto") -> "Motorola"
-            else -> Build.MANUFACTURER.replaceFirstChar { it.uppercase() }
+            else -> Build.MANUFACTURER?.replaceFirstChar { it.uppercase() }?.takeIf { it.isNotBlank() } ?: "Android"
         }
     }
 
@@ -72,8 +72,8 @@ object DeviceDetector {
      * Returns OEM-specific instructions for automated font apply in zFont 3.
      */
     fun getOEMGuideDetails(): String {
-        val m = Build.MANUFACTURER.lowercase()
-        val b = Build.BRAND.lowercase()
+        val m = (Build.MANUFACTURER ?: "").lowercase()
+        val b = (Build.BRAND ?: "").lowercase()
         return when {
             m.contains("samsung") || b.contains("samsung") ->
                 "On Samsung Galaxy (One UI 1 to 6/7):\n\n" +

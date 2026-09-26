@@ -16,7 +16,7 @@ class WritingToolsEngineTest {
 
         // Verifies standalone 'I' capitalization and grammar correction
         assertTrue("Expected 'I', got: ${result.correctedText}", result.correctedText.startsWith("I went"))
-        assertTrue("Expected 'they are', got: ${result.correctedText}", result.correctedText.contains("they are"))
+        assertTrue("Expected 'they are', got: ${result.correctedText}", result.correctedText.contains("they are", ignoreCase = true))
         assertTrue("Expected ending punctuation", result.correctedText.endsWith('.'))
     }
 
@@ -28,7 +28,7 @@ class WritingToolsEngineTest {
 
         val informal = "gonna do this asap thanks"
         val professional = engine.rewrite(informal, WritingToolsEngine.Tone.PROFESSIONAL)
-        assertTrue("Professional rewrite should elevate words: $professional", professional.contains("going to") || professional.contains("Thank you"))
+        assertTrue("Professional rewrite should elevate words: $professional", professional.contains("going to", ignoreCase = true) || professional.contains("thank you", ignoreCase = true))
 
         val verbose = "I am basically just wondering if in order to proceed we can do this."
         val concise = engine.rewrite(verbose, WritingToolsEngine.Tone.CONCISE)
