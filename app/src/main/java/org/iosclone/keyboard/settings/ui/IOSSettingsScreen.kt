@@ -39,6 +39,7 @@ import org.iosclone.keyboard.clipboard.ClipboardDatabase
 import org.iosclone.keyboard.emoji.DeviceDetector
 import org.iosclone.keyboard.emoji.ZFontAutomator
 import org.iosclone.keyboard.layout.LanguageLayout
+import org.iosclone.keyboard.settings.AppUpdateChecker
 import org.iosclone.keyboard.settings.KeyboardPreferences
 import org.iosclone.keyboard.theme.ThemeMode
 
@@ -69,6 +70,12 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
     var inlinePredictions by remember { mutableStateOf(prefs.inlinePredictionsEnabled) }
 
     var activeLanguage by remember { mutableStateOf(prefs.activeLanguage) }
+    var showNumberRow by remember { mutableStateOf(prefs.showNumberRow) }
+    var showPeriodKey by remember { mutableStateOf(prefs.showPeriodKey) }
+
+    var isCheckingUpdate by remember { mutableStateOf(false) }
+    var updateSubtitle by remember { mutableStateOf("v1.2.5 (Current)") }
+    var updateProgress by remember { mutableIntStateOf(-1) }
 
     var clipboardHistory by remember { mutableStateOf(prefs.clipboardHistoryEnabled) }
     var clipboardAutoSuggest by remember { mutableStateOf(prefs.clipboardAutoSuggest) }
@@ -332,6 +339,25 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                             .setNegativeButton("Cancel", null)
                             .show()
                     },
+                    showDivider = true
+                )
+                IOSSettingsToggleRow(
+                    title = "Dedicated Number Row",
+                    subtitle = "Display 5th row with numbers 1-0 above QWERTY",
+                    checked = showNumberRow,
+                    onCheckedChange = {
+                        showNumberRow = it
+                        prefs.showNumberRow = it
+                    }
+                )
+                IOSSettingsToggleRow(
+                    title = "Period Key (.) Near Spacebar",
+                    subtitle = "Place full-stop key next to spacebar",
+                    checked = showPeriodKey,
+                    onCheckedChange = {
+                        showPeriodKey = it
+                        prefs.showPeriodKey = it
+                    },
                     showDivider = false
                 )
             }
@@ -468,7 +494,63 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                 }
             }
 
-            // Section 9: About & Privacy
+            // Section 9: Software Update
+            IOSSectionHeader(title = "Software Update")
+            IOSGroupedCard {
+                IOSSettingsActionRow(
+                    title = "Software Update",
+                    subtitle = if (updateProgress in 0..99) "Downloading update: $updateProgress%…" else updateSubtitle,
+                    trailingText = when {
+                        isCheckingUpdate -> "Checking…"
+                        updateProgress in 0..99 -> "$updateProgress%"
+                        else -> "Check"
+                    },
+                    onClick = {
+                        if (isCheckingUpdate || updateProgress in 0..99) return@IOSSettingsActionRow
+                        isCheckingUpdate = true
+                        updateSubtitle = "Checking for releases…"
+                        AppUpdateChecker.check(
+                            currentVersion = "1.2.5",
+                            onResult = { info ->
+                                isCheckingUpdate = false
+                                if (info.hasUpdate && info.apkDownloadUrl != null) {
+                                    updateSubtitle = "Update available: ${info.latestVersion}"
+                                    AlertDialog.Builder(context)
+                                        .setTitle("Software Update Available")
+                                        .setMessage("A new version (${info.latestVersion}) of iOS Keyboard is available.\n\nRelease Notes:\n${info.releaseNotes}\n\nWould you like to download and install now?")
+                                        .setPositiveButton("Update Now") { _, _ ->
+                                            updateSubtitle = "Downloading update…"
+                                            updateProgress = 0
+                                            AppUpdateChecker.downloadAndInstall(
+                                                context = context,
+                                                downloadUrl = info.apkDownloadUrl,
+                                                onProgress = { p -> updateProgress = p },
+                                                onError = { err ->
+                                                    updateProgress = -1
+                                                    updateSubtitle = "Download failed"
+                                                    Toast.makeText(context, "Update failed: $err", Toast.LENGTH_LONG).show()
+                                                }
+                                            )
+                                        }
+                                        .setNegativeButton("Later", null)
+                                        .show()
+                                } else {
+                                    updateSubtitle = "iOS Keyboard is up to date (v1.2.5)"
+                                    Toast.makeText(context, "iOS Keyboard is up to date (v1.2.5)", Toast.LENGTH_SHORT).show()
+                                }
+                            },
+                            onError = { err ->
+                                isCheckingUpdate = false
+                                updateSubtitle = "Check failed"
+                                Toast.makeText(context, "Unable to check updates: $err", Toast.LENGTH_SHORT).show()
+                            }
+                        )
+                    },
+                    showDivider = false
+                )
+            }
+
+            // Section 10: About & Privacy
             IOSSectionHeader(title = "About & Privacy")
             IOSGroupedCard {
                 IOSSettingsActionRow(
@@ -484,7 +566,7 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                 )
                 IOSSettingsActionRow(
                     title = "Version",
-                    trailingText = "1.2.1 (Apple Intelligence)",
+                    trailingText = "1.2.5 (Apple Intelligence)",
                     showChevron = false,
                     onClick = {}
                 )

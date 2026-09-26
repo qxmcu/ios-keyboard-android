@@ -19,10 +19,27 @@ class QuantizedLanguageModel(private val context: Context? = null) {
 
     // Dynamic user-learned bigrams: prevWord -> (nextWord -> frequency)
     private val dynamicUserBigrams = mutableMapOf<String, MutableMap<String, Int>>()
+    private val userDb = context?.let { UserDictionaryDb(it) }
 
     init {
         loadConversationalCorpus()
         loadAssetTransitions()
+        loadPersistedUserBigrams()
+    }
+
+    private fun loadPersistedUserBigrams() {
+        val db = userDb ?: return
+        try {
+            val allBigrams = db.getAllBigrams()
+            synchronized(dynamicUserBigrams) {
+                for ((prev, nextList) in allBigrams) {
+                    val map = dynamicUserBigrams.getOrPut(prev) { mutableMapOf() }
+                    for ((next, freq) in nextList) {
+                        map[next] = freq
+                    }
+                }
+            }
+        } catch (_: Exception) {}
     }
 
     private fun loadAssetTransitions() {
@@ -126,6 +143,9 @@ class QuantizedLanguageModel(private val context: Context? = null) {
             val map = dynamicUserBigrams.getOrPut(p1) { mutableMapOf() }
             map[p2] = (map[p2] ?: 0) + 1
         }
+        try {
+            userDb?.learnBigram(p1, p2)
+        } catch (_: Exception) {}
     }
 
     private fun addBigram(w1: String, w2: String, quantizedScore: Int) {

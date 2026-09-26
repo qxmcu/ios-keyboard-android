@@ -4,8 +4,9 @@ package org.iosclone.keyboard.dictionary
  * Tracks recent autocorrection events to support instant undo on Backspace.
  * When the user types an autocorrected word and immediately presses Backspace,
  * the original verbatim typed text is restored without fighting the user.
+ * Rejected corrections are saved permanently in local SQLite so updates never erase user preferences.
  */
-class AutocorrectUndoManager {
+class AutocorrectUndoManager(private val userDb: UserDictionaryDb? = null) {
 
     data class ReplacementRecord(
         val originalTyped: String,
@@ -14,7 +15,21 @@ class AutocorrectUndoManager {
     )
 
     private var lastReplacement: ReplacementRecord? = null
-    private val temporarilyIgnoredWords = mutableSetOf<String>()
+    private val ignoredWords = mutableSetOf<String>()
+
+    init {
+        loadPersistedIgnoredWords()
+    }
+
+    private fun loadPersistedIgnoredWords() {
+        val db = userDb ?: return
+        try {
+            val allIgnored = db.getAllIgnoredWords()
+            synchronized(ignoredWords) {
+                ignoredWords.addAll(allIgnored)
+            }
+        } catch (_: Exception) {}
+    }
 
     fun recordReplacement(original: String, replaced: String) {
         lastReplacement = ReplacementRecord(
@@ -30,7 +45,7 @@ class AutocorrectUndoManager {
     fun shouldUndoOnDelete(textBeforeCursor: String): ReplacementRecord? {
         val last = lastReplacement ?: return null
         val now = System.currentTimeMillis()
-        if (now - last.timestamp > 3000) {
+        if (now - last.timestamp > 3500) {
             lastReplacement = null
             return null
         }
@@ -39,8 +54,8 @@ class AutocorrectUndoManager {
         val expectedSuffix = last.autocorrectedTo + " "
         val expectedWithoutSpace = last.autocorrectedTo
         if (textBeforeCursor.endsWith(expectedSuffix) || textBeforeCursor.endsWith(expectedWithoutSpace)) {
-            // Temporarily ignore this word so typing space doesn't immediately re-correct it
-            temporarilyIgnoredWords.add(last.originalTyped.lowercase())
+            // Learn permanently: the user explicitly reverted this autocorrect!
+            ignoreWordPermanently(last.originalTyped)
             val record = last
             lastReplacement = null
             return record
@@ -49,12 +64,30 @@ class AutocorrectUndoManager {
         return null
     }
 
+    fun ignoreWordPermanently(word: String) {
+        val lower = word.trim().lowercase()
+        if (lower.isEmpty()) return
+        synchronized(ignoredWords) {
+            ignoredWords.add(lower)
+        }
+        try {
+            userDb?.addIgnoredWord(lower)
+        } catch (_: Exception) {}
+    }
+
     fun isIgnored(word: String): Boolean {
-        return temporarilyIgnoredWords.contains(word.lowercase())
+        val lower = word.trim().lowercase()
+        return synchronized(ignoredWords) { ignoredWords.contains(lower) }
     }
 
     fun clearIgnored(word: String) {
-        temporarilyIgnoredWords.remove(word.lowercase())
+        val lower = word.trim().lowercase()
+        synchronized(ignoredWords) {
+            ignoredWords.remove(lower)
+        }
+        try {
+            userDb?.removeIgnoredWord(lower)
+        } catch (_: Exception) {}
     }
 
     fun reset() {

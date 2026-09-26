@@ -23,7 +23,7 @@ class DictionaryEngine(private val context: Context) {
 
     val languageModel = QuantizedLanguageModel(context)
     val textReplacementManager = TextReplacementManager(context)
-    val undoManager = AutocorrectUndoManager()
+    val undoManager = AutocorrectUndoManager(userDb)
 
     private var currentLanguage: LanguageLayout = LanguageLayout.QWERTY
 

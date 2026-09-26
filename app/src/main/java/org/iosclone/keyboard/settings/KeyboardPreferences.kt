@@ -99,4 +99,12 @@ class KeyboardPreferences(context: Context) {
     var inlinePredictionsEnabled: Boolean
         get() = prefs.getBoolean("inline_predictions_enabled", true)
         set(value) = prefs.edit().putBoolean("inline_predictions_enabled", value).apply()
+
+    var showNumberRow: Boolean
+        get() = prefs.getBoolean("show_number_row", false)
+        set(value) = prefs.edit().putBoolean("show_number_row", value).apply()
+
+    var showPeriodKey: Boolean
+        get() = prefs.getBoolean("show_period_key", false)
+        set(value) = prefs.edit().putBoolean("show_period_key", value).apply()
 }

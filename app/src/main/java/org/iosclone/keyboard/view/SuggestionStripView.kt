@@ -26,7 +26,7 @@ class SuggestionStripView @JvmOverloads constructor(
     private val rightCandidateTv: TextView
     private val sep1: View
     private val sep2: View
-    private val writingToolsBtn: TextView
+    private val writingToolsBtn: AppleIntelligenceIconView
     private val dividerPaint = Paint().apply {
         strokeWidth = 1f
     }
@@ -89,18 +89,11 @@ class SuggestionStripView @JvmOverloads constructor(
         }
         addView(quickPasteContainer)
 
-        // Apple Intelligence Sparkle ✨ Button
-        writingToolsBtn = TextView(context).apply {
-            text = "✨"
-            textSize = 15f
-            gravity = Gravity.CENTER
+        // Apple Intelligence Iridescent Icon Button
+        writingToolsBtn = AppleIntelligenceIconView(context).apply {
             val size = (32 * density).toInt()
             layoutParams = LayoutParams(size, size).apply {
                 marginEnd = (4 * density).toInt()
-            }
-            background = GradientDrawable().apply {
-                setColor(if (currentTheme.isDark) 0x22FFFFFF else 0x14000000)
-                cornerRadius = 16f * density
             }
             setOnClickListener {
                 onWritingToolsRequested?.invoke()
@@ -183,10 +176,7 @@ class SuggestionStripView @JvmOverloads constructor(
         sep2.setBackgroundColor(sepColor)
         dividerPaint.color = Color.TRANSPARENT
 
-        writingToolsBtn.background = GradientDrawable().apply {
-            setColor(if (theme.isDark) 0x22FFFFFF else 0x14000000)
-            cornerRadius = 16f * density
-        }
+        writingToolsBtn.setTheme(theme.isDark)
 
         updateCenterHighlight()
         invalidate()

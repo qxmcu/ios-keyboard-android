@@ -71,6 +71,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     private var emojiPickerView: EmojiPickerView? = null
     private var clipboardDrawerView: ClipboardDrawerView? = null
     private var dictationOverlayView: DictationOverlayView? = null
+    private var spellingCalloutView: org.iosclone.keyboard.view.IOSSpellingCalloutView? = null
 
     // State
     private var currentMode = KeyboardMode.LOWERCASE
@@ -228,6 +229,8 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 }.show(anchor)
             }
         }
+        spellingCalloutView = org.iosclone.keyboard.view.IOSSpellingCalloutView(this)
+        rootLayout?.addView(spellingCalloutView)
         rootLayout?.addView(suggestionStripView)
 
         // 2. Translation Bar (collapsible)
@@ -401,6 +404,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         super.onStartInput(attribute, restarting)
         wordBuffer.clear()
         suggestionStripView?.clearSuggestions()
+        spellingCalloutView?.dismiss()
     }
 
     override fun onStartInputView(info: EditorInfo?, restarting: Boolean) {
@@ -441,6 +445,67 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         updateKeyboardLayout()
         showMainKeyboard()
         updateNextWordPredictions()
+    }
+
+    override fun onUpdateSelection(
+        oldSelStart: Int,
+        oldSelEnd: Int,
+        newSelStart: Int,
+        newSelEnd: Int,
+        candidatesStart: Int,
+        candidatesEnd: Int
+    ) {
+        super.onUpdateSelection(oldSelStart, oldSelEnd, newSelStart, newSelEnd, candidatesStart, candidatesEnd)
+
+        // When user taps on a word or moves cursor without active typing in progress
+        if (newSelStart == newSelEnd && wordBuffer.isEmpty()) {
+            checkCursorWordForSuggestions()
+        } else {
+            spellingCalloutView?.dismiss()
+        }
+    }
+
+    private fun checkCursorWordForSuggestions() {
+        val ic = currentInputConnection ?: return
+        val textBefore = ic.getTextBeforeCursor(40, 0)?.toString() ?: ""
+        val textAfter = ic.getTextAfterCursor(40, 0)?.toString() ?: ""
+
+        val wordBefore = textBefore.takeLastWhile { it.isLetter() || it == '\'' }
+        val wordAfter = textAfter.takeWhile { it.isLetter() || it == '\'' }
+        val currentWord = (wordBefore + wordAfter).trim()
+
+        if (currentWord.length >= 2) {
+            val trie = dictionaryEngine.getTrie(currentLanguage)
+            val isKnown = trie?.contains(currentWord.lowercase()) == true
+            val undoRecord = dictionaryEngine.undoManager.shouldUndoOnDelete(textBefore)
+
+            if (!isKnown || undoRecord != null) {
+                val suggestions = trie?.searchFuzzy(currentWord.lowercase(), maxCost = 2, limit = 3)?.map { it.first } ?: emptyList()
+                if (suggestions.isNotEmpty() || undoRecord != null) {
+                    spellingCalloutView?.showCallout(
+                        word = currentWord,
+                        candidates = suggestions,
+                        revertOption = undoRecord?.originalTyped,
+                        theme = currentTheme,
+                        onCandidateSelected = { chosen ->
+                            ic.deleteSurroundingText(wordBefore.length, wordAfter.length)
+                            ic.commitText(chosen, 1)
+                            dictionaryEngine.onWordCommitted(chosen)
+                            spellingCalloutView?.dismiss()
+                            updateNextWordPredictions()
+                        },
+                        onNeverAutocorrect = { ignored ->
+                            dictionaryEngine.undoManager.ignoreWordPermanently(ignored)
+                            dictionaryEngine.onWordCommitted(ignored)
+                            spellingCalloutView?.dismiss()
+                            updateNextWordPredictions()
+                        }
+                    )
+                    return
+                }
+            }
+        }
+        spellingCalloutView?.dismiss()
     }
 
     private fun applyBottomInsets(insets: WindowInsetsCompat) {
@@ -513,7 +578,9 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             language = currentLanguage,
             mode = currentMode,
             oneHandedMode = oneHandedMode,
-            returnKeyLabel = returnActionLabel
+            returnKeyLabel = returnActionLabel,
+            showNumberRow = preferences.showNumberRow,
+            showPeriodKey = preferences.showPeriodKey
         )
         keyboardView?.layout = layout
     }
@@ -545,6 +612,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
 
     override fun onKey(key: KeyDefinition) {
         val ic = currentInputConnection ?: return
+        spellingCalloutView?.dismiss()
 
         when (key.keyType) {
             KeyType.SPACE -> {
@@ -620,6 +688,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
 
     override fun onText(text: String) {
         val ic = currentInputConnection ?: return
+        spellingCalloutView?.dismiss()
         ic.commitText(text, 1)
 
         if (text.length == 1 && (text[0].isLetter() || text[0] == '\'')) {
@@ -640,6 +709,7 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
 
     override fun onDelete() {
         val ic = currentInputConnection ?: return
+        spellingCalloutView?.dismiss()
         val textBefore = ic.getTextBeforeCursor(100, 0)?.toString() ?: ""
 
         // Signature iOS feature: Undo Autocorrect on immediate backspace!

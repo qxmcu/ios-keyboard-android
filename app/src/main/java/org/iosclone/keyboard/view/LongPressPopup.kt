@@ -18,7 +18,10 @@ class LongPressPopup {
     private val popupBounds = RectF()
     private val itemBounds = mutableListOf<RectF>()
 
-    var selectedIndex: Int = 0
+    var selectedIndex: Int = -1
+        private set
+
+    var hasDraggedToSelection: Boolean = false
         private set
 
     fun isShowing(): Boolean = itemBounds.isNotEmpty()
@@ -29,24 +32,33 @@ class LongPressPopup {
             val r = itemBounds[i]
             if (touchX >= r.left && touchX <= r.right) {
                 selectedIndex = i
+                hasDraggedToSelection = true
                 return
             }
         }
-        // If outside left/right bounds, clamp to nearest
-        if (touchX < popupBounds.left) selectedIndex = 0
-        else if (touchX > popupBounds.right) selectedIndex = itemBounds.lastIndex
+        // If outside left/right bounds, clamp if user has moved horizontally
+        if (touchX < popupBounds.left) {
+            selectedIndex = 0
+            hasDraggedToSelection = true
+        } else if (touchX > popupBounds.right) {
+            selectedIndex = itemBounds.lastIndex
+            hasDraggedToSelection = true
+        }
     }
 
     fun getSelectedCharacter(key: KeyDefinition): String? {
         val accents = key.accents
-        if (accents.isEmpty()) return null
-        return accents.getOrNull(selectedIndex) ?: accents.firstOrNull()
+        if (accents.isEmpty() || !hasDraggedToSelection || selectedIndex !in accents.indices) {
+            return null
+        }
+        return accents.getOrNull(selectedIndex)
     }
 
     fun dismiss() {
         itemBounds.clear()
         popupBounds.setEmpty()
-        selectedIndex = 0
+        selectedIndex = -1
+        hasDraggedToSelection = false
     }
 
     fun draw(
@@ -98,7 +110,7 @@ class LongPressPopup {
             itemBounds.add(rect)
 
             // Draw highlight if selected
-            if (i == selectedIndex) {
+            if (hasDraggedToSelection && i == selectedIndex) {
                 highlightPaint.color = theme.accentBlue
                 canvas.drawRoundRect(
                     RectF(rect.left + (2f * density), rect.top + (2f * density), rect.right - (2f * density), rect.bottom - (2f * density)),
@@ -107,7 +119,7 @@ class LongPressPopup {
             }
 
             // Draw character
-            textPaint.color = if (i == selectedIndex) 0xFFFFFFFF.toInt() else theme.textPrimary
+            textPaint.color = if (hasDraggedToSelection && i == selectedIndex) 0xFFFFFFFF.toInt() else theme.textPrimary
             textPaint.textSize = 20f * density
             val fontMetrics = textPaint.fontMetrics
             val textY = rect.centerY() - (fontMetrics.ascent + fontMetrics.descent) / 2f

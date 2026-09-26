@@ -96,6 +96,7 @@ class IOSKeyboardView @JvmOverloads constructor(
     // Glide typing
     private val gestureTrailRenderer = GestureTrailRenderer()
     private val gestureMatcher = GesturePathMatcher()
+    private val gestureStrokePoints = mutableListOf<org.iosclone.keyboard.gesture.GesturePoint>()
 
     // Multi-touch tracking
     private var activePointerId: Int = MotionEvent.INVALID_POINTER_ID
@@ -103,6 +104,23 @@ class IOSKeyboardView @JvmOverloads constructor(
     private var isGliding = false
     private var glideStartX = 0f
     private var glideStartY = 0f
+
+    // Continuous Backspace on Hold
+    private var isContinuousBackspaceActive = false
+    private var backspaceRepeatCount = 0
+    private val backspaceRepeatRunnable = object : Runnable {
+        override fun run() {
+            if (pressedKey?.keyType == KeyType.DELETE) {
+                isContinuousBackspaceActive = true
+                backspaceRepeatCount++
+                actionListener?.onDelete()
+                audioHapticFeedback?.playKeystrokeSound(SoundType.DELETE, preferences.soundEnabled, preferences.soundVolume, this@IOSKeyboardView)
+                audioHapticFeedback?.performHapticFeedback(SoundType.DELETE, preferences.hapticsEnabled, preferences.hapticsIntensity, this@IOSKeyboardView)
+                val delay = if (backspaceRepeatCount > 15) 35L else 50L
+                mainHandler.postDelayed(this, delay)
+            }
+        }
+    }
 
     // Spacebar Cursor Trackpad Mode
     private var isTrackpadMode = false
@@ -171,10 +189,11 @@ class IOSKeyboardView @JvmOverloads constructor(
             else -> (41f * density)                  // Compact screens
         }
 
+        val rowCount = layout?.rows?.size ?: (if (preferences.showNumberRow) 5 else 4)
         val verticalRowGap = if (isLandscape) (6f * density) else (10f * density)
         val topPadding = 6f * density
         val floatingBarHeight = if (isLandscape) 0f else (42f * density)
-        val totalKeysHeight = (targetRowHeight * 4) + (verticalRowGap * 3) + topPadding + (6f * density)
+        val totalKeysHeight = (targetRowHeight * rowCount) + (verticalRowGap * (rowCount - 1)) + topPadding + (6f * density)
 
         val baseHeight = (totalKeysHeight * preferences.keyboardHeightFactor) + floatingBarHeight + bottomInset
         val height = baseHeight.toInt()
@@ -240,7 +259,7 @@ class IOSKeyboardView @JvmOverloads constructor(
             longPressPopup.draw(canvas, currentPressed, width.toFloat(), currentTheme, density)
         } else if (currentPressed != null && preferences.keyPopupsEnabled && !isGliding && !isTrackpadMode && !isLongPressActive) {
             // 7. Key Magnifier Popup Bubble
-            magnifierPopup.draw(canvas, currentPressed, currentTheme, density)
+            magnifierPopup.draw(canvas, currentPressed, currentTheme, density, width.toFloat())
         }
     }
 
@@ -390,6 +409,12 @@ class IOSKeyboardView @JvmOverloads constructor(
                 isLongPressActive = false
                 longPressPopup.dismiss()
                 gestureTrailRenderer.clear()
+                gestureStrokePoints.clear()
+                gestureStrokePoints.add(org.iosclone.keyboard.gesture.GesturePoint(x, y, System.currentTimeMillis()))
+
+                mainHandler.removeCallbacks(backspaceRepeatRunnable)
+                isContinuousBackspaceActive = false
+                backspaceRepeatCount = 0
 
                 // Check one-handed docking toggle
                 if (l.oneHandedMode != OneHandedMode.NORMAL && l.oneHandedSideButtonBounds.contains(x, y)) {
@@ -403,7 +428,13 @@ class IOSKeyboardView @JvmOverloads constructor(
                 pressedKey = key
                 if (key != null) {
                     playKeyFeedback(key)
-                    mainHandler.postDelayed(longPressRunnable, 350)
+                    if (key.keyType == KeyType.DELETE) {
+                        actionListener?.onDelete()
+                        mainHandler.postDelayed(backspaceRepeatRunnable, 400L)
+                    } else {
+                        magnifierPopup.onKeyDown(key)
+                        mainHandler.postDelayed(longPressRunnable, 450L)
+                    }
                 }
                 invalidate()
                 return true
@@ -430,29 +461,52 @@ class IOSKeyboardView @JvmOverloads constructor(
                     return true
                 }
 
-                // Check glide gesture initiation
-                val dist = abs(x - glideStartX) + abs(y - glideStartY)
-                val density = resources.displayMetrics.density
-                if (dist > (16f * density) && preferences.gestureTypingEnabled && pressedKey?.keyType == KeyType.CHARACTER) {
-                    if (!isGliding) {
-                        isGliding = true
-                        mainHandler.removeCallbacks(longPressRunnable)
-                        gestureTrailRenderer.addPoint(glideStartX, glideStartY)
-                    }
+                if (isGliding) {
+                    gestureStrokePoints.add(org.iosclone.keyboard.gesture.GesturePoint(x, y, System.currentTimeMillis()))
                     gestureTrailRenderer.addPoint(x, y)
                     invalidate()
                     return true
                 }
 
+                // Check glide gesture initiation
+                val dist = abs(x - glideStartX) + abs(y - glideStartY)
+                val density = resources.displayMetrics.density
+                if (dist > (16f * density) && preferences.gestureTypingEnabled && pressedKey?.keyType == KeyType.CHARACTER) {
+                    isGliding = true
+                    mainHandler.removeCallbacks(longPressRunnable)
+                    gestureTrailRenderer.addPoint(glideStartX, glideStartY)
+                    gestureTrailRenderer.addPoint(x, y)
+                    gestureStrokePoints.add(org.iosclone.keyboard.gesture.GesturePoint(x, y, System.currentTimeMillis()))
+                    invalidate()
+                    return true
+                }
+
+                if (pressedKey?.keyType == KeyType.DELETE) {
+                    val curKey = l.findKeyAt(x, y)
+                    if (curKey != pressedKey) {
+                        mainHandler.removeCallbacks(backspaceRepeatRunnable)
+                        isContinuousBackspaceActive = false
+                    }
+                }
+
                 // Normal key sliding
                 val key = l.findKeyAt(x, y)
                 if (key != pressedKey && !isGliding) {
+                    mainHandler.removeCallbacks(longPressRunnable)
+                    mainHandler.removeCallbacks(backspaceRepeatRunnable)
                     pressedKey = key
                     isLongPressActive = false
                     longPressPopup.dismiss()
-                    mainHandler.removeCallbacks(longPressRunnable)
                     if (key != null) {
-                        mainHandler.postDelayed(longPressRunnable, 350)
+                        if (key.keyType == KeyType.DELETE) {
+                            isContinuousBackspaceActive = false
+                            backspaceRepeatCount = 0
+                            actionListener?.onDelete()
+                            mainHandler.postDelayed(backspaceRepeatRunnable, 400L)
+                        } else {
+                            magnifierPopup.onKeyDown(key)
+                            mainHandler.postDelayed(longPressRunnable, 450L)
+                        }
                     }
                     invalidate()
                 }
@@ -461,6 +515,7 @@ class IOSKeyboardView @JvmOverloads constructor(
 
             MotionEvent.ACTION_UP -> {
                 mainHandler.removeCallbacks(longPressRunnable)
+                mainHandler.removeCallbacks(backspaceRepeatRunnable)
 
                 if (isTrackpadMode) {
                     isTrackpadMode = false
@@ -476,6 +531,8 @@ class IOSKeyboardView @JvmOverloads constructor(
                         val selectedAccent = longPressPopup.getSelectedCharacter(key)
                         if (selectedAccent != null) {
                             actionListener?.onText(selectedAccent)
+                        } else {
+                            dispatchKeyAction(key)
                         }
                     }
                     longPressPopup.dismiss()
@@ -490,11 +547,11 @@ class IOSKeyboardView @JvmOverloads constructor(
 
                 if (isGliding) {
                     isGliding = false
-                    val points = gestureTrailRenderer.getPoints()
-                    val candidates = gestureMatcher.match(points, l, actionListener?.getDictionaryTrie())
+                    val candidates = gestureMatcher.match(gestureStrokePoints, l, actionListener?.getDictionaryTrie())
                     if (candidates.isNotEmpty()) {
                         actionListener?.onGlideTypingCompleted(candidates)
                     }
+                    gestureStrokePoints.clear()
                     gestureTrailRenderer.clear()
                     pressedKey = null
                     invalidate()
@@ -503,7 +560,11 @@ class IOSKeyboardView @JvmOverloads constructor(
 
                 val key = pressedKey
                 if (key != null) {
-                    dispatchKeyAction(key)
+                    if (key.keyType == KeyType.DELETE) {
+                        isContinuousBackspaceActive = false
+                    } else {
+                        dispatchKeyAction(key)
+                    }
                 }
 
                 pressedKey = null
@@ -513,9 +574,12 @@ class IOSKeyboardView @JvmOverloads constructor(
 
             MotionEvent.ACTION_CANCEL -> {
                 mainHandler.removeCallbacks(longPressRunnable)
+                mainHandler.removeCallbacks(backspaceRepeatRunnable)
+                isContinuousBackspaceActive = false
+                gestureStrokePoints.clear()
+                gestureTrailRenderer.clear()
                 isLongPressActive = false
                 longPressPopup.dismiss()
-                gestureTrailRenderer.clear()
                 isGliding = false
                 isTrackpadMode = false
                 pressedKey = null

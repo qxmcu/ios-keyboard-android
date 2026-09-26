@@ -16,50 +16,47 @@ class GestureTrailRenderer {
         strokeJoin = Paint.Join.ROUND
     }
 
-    private val points = mutableListOf<GesturePoint>()
-    private val maxTrailDurationMs = 250L
+    private val visualPoints = mutableListOf<GesturePoint>()
+    private val maxTrailDurationMs = 280L
 
     fun addPoint(x: Float, y: Float) {
         val now = System.currentTimeMillis()
-        points.add(GesturePoint(x, y, now))
+        visualPoints.add(GesturePoint(x, y, now))
         cleanOldPoints(now)
     }
 
     fun clear() {
-        points.clear()
+        visualPoints.clear()
         trailPath.reset()
     }
 
-    fun hasPoints(): Boolean = points.isNotEmpty()
+    fun hasPoints(): Boolean = visualPoints.isNotEmpty()
 
     private fun cleanOldPoints(now: Long) {
-        points.removeAll { now - it.timestamp > maxTrailDurationMs }
+        visualPoints.removeAll { now - it.timestamp > maxTrailDurationMs }
     }
 
     fun draw(canvas: Canvas, strokeColor: Int, strokeWidthPx: Float) {
         val now = System.currentTimeMillis()
         cleanOldPoints(now)
 
-        if (points.size < 2) return
+        if (visualPoints.size < 2) return
 
         paint.color = strokeColor
         paint.strokeWidth = strokeWidthPx
 
         trailPath.reset()
-        trailPath.moveTo(points[0].x, points[0].y)
+        trailPath.moveTo(visualPoints[0].x, visualPoints[0].y)
 
-        for (i in 1 until points.size) {
-            val prev = points[i - 1]
-            val curr = points[i]
-            // Quadratic Bezier curve between points for silky smooth curve
+        for (i in 1 until visualPoints.size) {
+            val prev = visualPoints[i - 1]
+            val curr = visualPoints[i]
             val midX = (prev.x + curr.x) / 2f
             val midY = (prev.y + curr.y) / 2f
             trailPath.quadTo(prev.x, prev.y, midX, midY)
         }
-        trailPath.lineTo(points.last().x, points.last().y)
+        trailPath.lineTo(visualPoints.last().x, visualPoints.last().y)
 
         canvas.drawPath(trailPath, paint)
     }
-
-    fun getPoints(): List<GesturePoint> = points.toList()
 }

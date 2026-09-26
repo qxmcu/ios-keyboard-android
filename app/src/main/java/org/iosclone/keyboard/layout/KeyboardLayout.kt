@@ -104,13 +104,26 @@ class KeyboardLayout(
 
         var currentY = topPadding
 
+        val hasNumberRow = (rows.size >= 5)
         for (rowIndex in rows.indices) {
             val row = rows[rowIndex]
             if (row.isEmpty()) continue
 
-            when (rowIndex) {
-                0 -> {
-                    // Row 1: standard characters (e.g. Q W E R T Y U I O P)
+            val logicalRowType = when {
+                hasNumberRow && rowIndex == 0 -> 0 // number row
+                hasNumberRow && rowIndex == 1 -> 1 // alpha row 1
+                hasNumberRow && rowIndex == 2 -> 2 // alpha row 2
+                hasNumberRow && rowIndex == 3 -> 3 // shift/del row
+                hasNumberRow && rowIndex == 4 -> 4 // bottom row
+                !hasNumberRow && rowIndex == 0 -> 1 // alpha row 1
+                !hasNumberRow && rowIndex == 1 -> 2 // alpha row 2
+                !hasNumberRow && rowIndex == 2 -> 3 // shift/del row
+                else -> 4 // bottom row
+            }
+
+            when (logicalRowType) {
+                0, 1 -> {
+                    // Row 0 or 1: standard characters (e.g. 1-0 or Q-P)
                     val colsInRow = row.size
                     val keyW = if (colsInRow == standardCols) baseKeyWidth
                     else (totalRowWidth - (colsInRow - 1) * horizontalKeyGap) / colsInRow
@@ -121,7 +134,7 @@ class KeyboardLayout(
                         currentX += keyW + horizontalKeyGap
                     }
                 }
-                1 -> {
+                2 -> {
                     // Row 2: centered with half-key indent (e.g. A S D F G H J K L)
                     val colsInRow = row.size
                     if (colsInRow < standardCols) {
@@ -141,7 +154,7 @@ class KeyboardLayout(
                         }
                     }
                 }
-                2 -> {
+                3 -> {
                     // Row 3: Shift on left, Delete on right, characters centered
                     if (row.size >= 3) {
                         val leftKey = row.first()
@@ -171,7 +184,7 @@ class KeyboardLayout(
                     }
                 }
                 else -> {
-                    // Row 4: 123, Emoji, Space, Return
+                    // Row 4: 123, Emoji, Space, [Period], Return
                     measureBottomRow(row, startXOffset + outerHorizontalMargin, currentY, totalRowWidth, rowHeight, baseKeyWidth, horizontalKeyGap, verticalRowGap)
                 }
             }

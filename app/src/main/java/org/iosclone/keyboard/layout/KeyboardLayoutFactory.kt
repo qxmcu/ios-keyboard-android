@@ -29,13 +29,15 @@ object KeyboardLayoutFactory {
         language: LanguageLayout,
         mode: KeyboardMode,
         oneHandedMode: OneHandedMode = OneHandedMode.NORMAL,
-        returnKeyLabel: String = "return"
+        returnKeyLabel: String = "return",
+        showNumberRow: Boolean = false,
+        showPeriodKey: Boolean = false
     ): KeyboardLayout {
         val rows = when (mode) {
-            KeyboardMode.NUMERIC -> createNumericRows()
-            KeyboardMode.SYMBOL -> createSymbolRows()
-            KeyboardMode.LOWERCASE -> createAlphaRows(language, uppercase = false)
-            KeyboardMode.UPPERCASE, KeyboardMode.CAPS_LOCK -> createAlphaRows(language, uppercase = true)
+            KeyboardMode.NUMERIC -> createNumericRows(showPeriodKey)
+            KeyboardMode.SYMBOL -> createSymbolRows(showPeriodKey)
+            KeyboardMode.LOWERCASE -> createAlphaRows(language, uppercase = false, showNumberRow = showNumberRow, showPeriodKey = showPeriodKey)
+            KeyboardMode.UPPERCASE, KeyboardMode.CAPS_LOCK -> createAlphaRows(language, uppercase = true, showNumberRow = showNumberRow, showPeriodKey = showPeriodKey)
         }
 
         return KeyboardLayout(rows, mode, language).apply {
@@ -44,7 +46,12 @@ object KeyboardLayoutFactory {
         }
     }
 
-    private fun createAlphaRows(language: LanguageLayout, uppercase: Boolean): List<List<KeyDefinition>> {
+    private fun createAlphaRows(
+        language: LanguageLayout,
+        uppercase: Boolean,
+        showNumberRow: Boolean,
+        showPeriodKey: Boolean
+    ): List<List<KeyDefinition>> {
         val (row1Chars, row2Chars, row3Chars) = when (language) {
             LanguageLayout.QWERTY -> Triple("qwertyuiop", "asdfghjkl", "zxcvbnm")
             LanguageLayout.QWERTZ -> Triple("qwertzuiop", "asdfghjkl", "yxcvbnm")
@@ -117,18 +124,29 @@ object KeyboardLayoutFactory {
             )
         )
 
-        // Row 4 (Bottom Bar: 123, Emoji, Space, Return)
-        val row4Keys = listOf(
+        // Row 4 (Bottom Bar: 123, Emoji, Space, [Optional .], Return)
+        val row4Keys = mutableListOf(
             KeyDefinition(code = -2, label = "123", keyType = KeyType.SWITCH_NUMERIC, weight = 1.35f),
             KeyDefinition(code = -7, label = "🙂", keyType = KeyType.EMOJI, weight = 1.15f),
-            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = 5.0f),
-            KeyDefinition(code = -4, label = "↵", keyType = KeyType.RETURN, weight = 1.85f)
+            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = if (showPeriodKey) 4.0f else 5.0f)
         )
+        if (showPeriodKey) {
+            row4Keys.add(KeyDefinition(code = 46, label = ".", keyType = KeyType.CHARACTER, weight = 1.0f))
+        }
+        row4Keys.add(KeyDefinition(code = -4, label = "↵", keyType = KeyType.RETURN, weight = 1.85f))
 
-        return listOf(row1, row2, row3Keys, row4Keys)
+        return if (showNumberRow) {
+            val numberRow = "1234567890".map { c ->
+                val accents = ACCENTS_MAP[c] ?: emptyList()
+                KeyDefinition(code = c.code, label = c.toString(), keyType = KeyType.CHARACTER, weight = 1.0f, accents = accents)
+            }
+            listOf(numberRow, row1, row2, row3Keys, row4Keys)
+        } else {
+            listOf(row1, row2, row3Keys, row4Keys)
+        }
     }
 
-    private fun createNumericRows(): List<List<KeyDefinition>> {
+    private fun createNumericRows(showPeriodKey: Boolean = false): List<List<KeyDefinition>> {
         val row1 = "1234567890".map { c ->
             val accents = ACCENTS_MAP[c] ?: emptyList()
             KeyDefinition(code = c.code, label = c.toString(), keyType = KeyType.CHARACTER, weight = 1.0f, accents = accents)
@@ -151,17 +169,20 @@ object KeyboardLayoutFactory {
 
         row3Keys.add(KeyDefinition(code = -5, label = "⌫", keyType = KeyType.DELETE, weight = 1.4f))
 
-        val row4Keys = listOf(
+        val row4Keys = mutableListOf(
             KeyDefinition(code = -1, label = "ABC", keyType = KeyType.SWITCH_ALPHA, weight = 1.35f),
             KeyDefinition(code = -7, label = "🙂", keyType = KeyType.EMOJI, weight = 1.15f),
-            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = 5.0f),
-            KeyDefinition(code = -4, label = "↵", keyType = KeyType.RETURN, weight = 1.85f)
+            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = if (showPeriodKey) 4.0f else 5.0f)
         )
+        if (showPeriodKey) {
+            row4Keys.add(KeyDefinition(code = 46, label = ".", keyType = KeyType.CHARACTER, weight = 1.0f))
+        }
+        row4Keys.add(KeyDefinition(code = -4, label = "↵", keyType = KeyType.RETURN, weight = 1.85f))
 
         return listOf(row1, row2, row3Keys, row4Keys)
     }
 
-    private fun createSymbolRows(): List<List<KeyDefinition>> {
+    private fun createSymbolRows(showPeriodKey: Boolean = false): List<List<KeyDefinition>> {
         val row1Chars = listOf("[", "]", "{", "}", "#", "%", "^", "*", "+", "=")
         val row1 = row1Chars.map { s ->
             KeyDefinition(code = s[0].code, label = s, keyType = KeyType.CHARACTER, weight = 1.0f)
@@ -183,12 +204,15 @@ object KeyboardLayoutFactory {
 
         row3Keys.add(KeyDefinition(code = -5, label = "⌫", keyType = KeyType.DELETE, weight = 1.4f))
 
-        val row4Keys = listOf(
+        val row4Keys = mutableListOf(
             KeyDefinition(code = -1, label = "ABC", keyType = KeyType.SWITCH_ALPHA, weight = 1.35f),
             KeyDefinition(code = -7, label = "🙂", keyType = KeyType.EMOJI, weight = 1.15f),
-            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = 5.0f),
-            KeyDefinition(code = -4, label = "↵", keyType = KeyType.RETURN, weight = 1.85f)
+            KeyDefinition(code = 32, label = "space", keyType = KeyType.SPACE, weight = if (showPeriodKey) 4.0f else 5.0f)
         )
+        if (showPeriodKey) {
+            row4Keys.add(KeyDefinition(code = 46, label = ".", keyType = KeyType.CHARACTER, weight = 1.0f))
+        }
+        row4Keys.add(KeyDefinition(code = -4, label = "↵", keyType = KeyType.RETURN, weight = 1.85f))
 
         return listOf(row1, row2, row3Keys, row4Keys)
     }

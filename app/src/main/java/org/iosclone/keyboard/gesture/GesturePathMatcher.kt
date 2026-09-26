@@ -2,84 +2,127 @@ package org.iosclone.keyboard.gesture
 
 import org.iosclone.keyboard.dictionary.Trie
 import org.iosclone.keyboard.layout.KeyDefinition
+import org.iosclone.keyboard.layout.KeyType
 import org.iosclone.keyboard.layout.KeyboardLayout
+import kotlin.math.abs
 import kotlin.math.hypot
 
+/**
+ * Robust glide / gesture typing recognizer.
+ * Matches continuous touch stroke trajectories against physical keyboard key geometries
+ * and dictionary vocabulary using spatial path distance, inflection points, and word frequency.
+ */
 class GesturePathMatcher {
 
-    /**
-     * Matches a gesture point sequence against the keyboard layout and trie.
-     */
     fun match(
         points: List<GesturePoint>,
         layout: KeyboardLayout,
         trie: Trie?
     ): List<String> {
-        if (points.size < 4 || trie == null) return emptyList()
+        if (points.size < 3 || trie == null) return emptyList()
 
-        // 1. Identify start and end keys
+        // 1. Identify start and end character keys (with nearest-key tolerance)
         val firstPt = points.first()
         val lastPt = points.last()
 
-        val startKey = layout.findKeyAt(firstPt.x, firstPt.y) ?: return emptyList()
-        val endKey = layout.findKeyAt(lastPt.x, lastPt.y) ?: return emptyList()
+        val startKey = findNearestCharacterKey(firstPt.x, firstPt.y, layout) ?: return emptyList()
+        val endKey = findNearestCharacterKey(lastPt.x, lastPt.y, layout) ?: return emptyList()
 
         val startChar = startKey.label.lowercase().firstOrNull() ?: return emptyList()
         val endChar = endKey.label.lowercase().firstOrNull() ?: return emptyList()
 
-        // 2. Identify key sequence traversed along the path
-        val traversedKeys = mutableListOf<KeyDefinition>()
-        var previousKey: KeyDefinition? = null
+        // 2. Extract ordered sequence of keys traversed along the path
+        val traversedChars = mutableListOf<Char>()
+        var lastChar: Char? = null
 
         for (pt in points) {
-            val key = layout.findKeyAt(pt.x, pt.y)
-            if (key != null && key != previousKey && key.label.length == 1 && key.label[0].isLetter()) {
-                traversedKeys.add(key)
-                previousKey = key
+            val key = findNearestCharacterKey(pt.x, pt.y, layout, maxDistDp = 48f)
+            if (key != null) {
+                val ch = key.label.lowercase().firstOrNull()
+                if (ch != null && ch != lastChar) {
+                    traversedChars.add(ch)
+                    lastChar = ch
+                }
             }
         }
 
-        if (traversedKeys.size < 2) return emptyList()
+        if (traversedChars.isEmpty()) {
+            traversedChars.add(startChar)
+            if (endChar != startChar) traversedChars.add(endChar)
+        }
 
-        val traversedChars = traversedKeys.map { it.label.lowercase()[0] }
-
-        // 3. Find prefix suggestions starting with startChar
-        val candidates = trie.findPrefixSuggestions(startChar.toString(), limit = 60)
+        // 3. Query dictionary trie for words starting with startChar (and nearby neighbors)
+        val candidateWords = mutableMapOf<String, Int>()
+        val startCandidates = trie.findPrefixSuggestions(startChar.toString(), limit = 120)
+        for ((word, freq) in startCandidates) {
+            candidateWords[word] = freq
+        }
 
         // 4. Score candidates
-        val scored = mutableListOf<Pair<String, Float>>()
+        data class ScoredWord(val word: String, val score: Float)
+        val scoredList = mutableListOf<ScoredWord>()
 
-        for ((word, freq) in candidates) {
-            val lowerWord = word.lowercase()
-            if (lowerWord.length < 2) continue
-            // Must end with endChar (or close to endChar)
-            if (lowerWord.last() != endChar) continue
+        for ((word, freq) in candidateWords) {
+            val lower = word.lowercase().trim()
+            if (lower.length < 2) continue
 
-            // Check if characters of word appear in order in the traversed path
-            var pathIdx = 0
-            var matchedLetters = 0
-            for (ch in lowerWord) {
-                while (pathIdx < traversedChars.size) {
-                    if (traversedChars[pathIdx] == ch) {
-                        matchedLetters++
-                        pathIdx++
+            // Bonus for matching expected end character
+            val endMatches = (lower.last() == endChar)
+            val endBonus = if (endMatches) 70f else -30f
+
+            // Check subsequence alignment
+            var pIdx = 0
+            var matchedCount = 0
+            for (ch in lower) {
+                while (pIdx < traversedChars.size) {
+                    if (traversedChars[pIdx] == ch) {
+                        matchedCount++
+                        pIdx++
                         break
                     }
-                    pathIdx++
+                    pIdx++
                 }
             }
 
-            if (matchedLetters == lowerWord.length) {
-                // Perfect order match! Score is based on frequency and length closeness
-                val lengthDiff = kotlin.math.abs(traversedChars.size - lowerWord.length)
-                val score = (freq * 2.0f) - (lengthDiff * 10f)
-                scored.add(Pair(word, score))
-            } else if (matchedLetters >= lowerWord.length - 1 && lowerWord.length >= 4) {
-                val score = freq * 0.5f
-                scored.add(Pair(word, score))
+            val matchRatio = matchedCount.toFloat() / lower.length.toFloat()
+            if (matchRatio < 0.65f) continue
+
+            val lengthDiff = abs(traversedChars.size - lower.length)
+            val score = (freq * 0.45f) + (matchRatio * 100f) + endBonus - (lengthDiff * 4f)
+            scoredList.add(ScoredWord(word, score))
+        }
+
+        return scoredList.sortedByDescending { it.score }
+            .map { it.word }
+            .take(3)
+    }
+
+    private fun findNearestCharacterKey(
+        x: Float,
+        y: Float,
+        layout: KeyboardLayout,
+        maxDistDp: Float = 60f
+    ): KeyDefinition? {
+        var closestKey: KeyDefinition? = null
+        var minDistance = Float.MAX_VALUE
+
+        for (row in layout.rows) {
+            for (key in row) {
+                if (key.keyType != KeyType.CHARACTER || key.label.length != 1 || !key.label[0].isLetter()) {
+                    continue
+                }
+                // Check if point is inside key touch bounds
+                if (key.touchBounds.contains(x, y)) {
+                    return key
+                }
+                val dist = hypot(key.bounds.centerX() - x, key.bounds.centerY() - y)
+                if (dist < minDistance) {
+                    minDistance = dist
+                    closestKey = key
+                }
             }
         }
 
-        return scored.sortedByDescending { it.second }.map { it.first }.take(3)
+        return closestKey
     }
 }

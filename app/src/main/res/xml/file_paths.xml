@@ -2,7 +2,9 @@
 <paths>
     <cache-path name="emoji_stickers" path="emoji_stickers/" />
     <cache-path name="fonts" path="fonts/" />
+    <cache-path name="updates" path="updates/" />
     <external-files-path name="fonts" path="fonts/" />
     <external-files-path name="export" path="exports/" />
+    <external-files-path name="updates" path="updates/" />
     <external-files-path name="all_external" path="." />
 </paths>
