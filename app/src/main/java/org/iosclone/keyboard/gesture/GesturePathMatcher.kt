@@ -14,6 +14,16 @@ import kotlin.math.hypot
  */
 class GesturePathMatcher {
 
+    // Adjacency map for QWERTY layout (each key's physical neighbors)
+    private val adjacencyMap = mapOf(
+        'q' to "wa", 'w' to "qase", 'e' to "wsdr", 'r' to "edft", 't' to "rfgy",
+        'y' to "tghu", 'u' to "yhji", 'i' to "ujko", 'o' to "iklp", 'p' to "ol",
+        'a' to "qwsz", 's' to "awedxz", 'd' to "serfcx", 'f' to "drtgvc",
+        'g' to "ftyhbv", 'h' to "gyujnb", 'j' to "huikmn", 'k' to "jiolm",
+        'l' to "kop", 'z' to "asx", 'x' to "zsdc", 'c' to "xdfv",
+        'v' to "cfgb", 'b' to "vghn", 'n' to "bhjm", 'm' to "njk"
+    )
+
     fun match(
         points: List<GesturePoint>,
         layout: KeyboardLayout,
@@ -68,11 +78,24 @@ class GesturePathMatcher {
         val lowerEndChar = endChar.lowercaseChar()
         val traversedLowerChars = traversedChars.map { it.lowercaseChar() }
 
-        // 3. Query dictionary trie for words starting with startChar (and nearby neighbors)
+        // 3. Query dictionary trie for words starting with startChar AND adjacent neighbors
         val candidateWords = mutableMapOf<String, Int>()
-        val startCandidates = trie.findPrefixSuggestions(lowerStartChar.toString(), limit = 120)
+
+        // Primary: words starting with the detected start character
+        val startCandidates = trie.findPrefixSuggestions(lowerStartChar.toString(), limit = 200)
         for ((word, freq) in startCandidates) {
             candidateWords[word] = freq
+        }
+
+        // Secondary: words starting with adjacent keys (handles slight mis-targeting at start)
+        val neighbors = adjacencyMap[lowerStartChar] ?: ""
+        for (neighbor in neighbors) {
+            val neighborCandidates = trie.findPrefixSuggestions(neighbor.toString(), limit = 60)
+            for ((word, freq) in neighborCandidates) {
+                if (!candidateWords.containsKey(word)) {
+                    candidateWords[word] = freq
+                }
+            }
         }
 
         // 4. Score candidates
@@ -85,9 +108,10 @@ class GesturePathMatcher {
 
             // Bonus for matching expected end character
             val endMatches = (lower.last() == lowerEndChar)
-            val endBonus = if (endMatches) 70f else -30f
+            val endBonus = if (endMatches) 80f else -20f
 
-            // Check subsequence alignment
+            // Check subsequence alignment: how many of the word's characters
+            // appear in order in the traversed key sequence
             var pIdx = 0
             var matchedCount = 0
             for (ch in lower) {
@@ -102,10 +126,14 @@ class GesturePathMatcher {
             }
 
             val matchRatio = matchedCount.toFloat() / lower.length.toFloat()
-            if (matchRatio < 0.65f) continue
+            if (matchRatio < 0.5f) continue
 
-            val lengthDiff = abs(traversedLowerChars.size - lower.length)
-            val score = (freq * 0.45f) + (matchRatio * 100f) + endBonus - (lengthDiff * 4f)
+            // Length similarity bonus: words closer in length to the traversed unique chars
+            val uniqueTraversed = traversedLowerChars.distinct().size
+            val lengthDiff = abs(uniqueTraversed - lower.length)
+            val lengthBonus = if (lengthDiff <= 1) 30f else if (lengthDiff <= 2) 15f else 0f
+
+            val score = (freq * 0.45f) + (matchRatio * 120f) + endBonus + lengthBonus - (lengthDiff * 3f)
             scoredList.add(ScoredWord(word, score))
         }
 

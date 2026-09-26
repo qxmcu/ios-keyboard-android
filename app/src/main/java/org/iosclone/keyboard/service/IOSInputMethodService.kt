@@ -549,10 +549,17 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     }
 
     private fun applyBottomInsets(insets: WindowInsetsCompat) {
-        val navBars = insets.getInsets(WindowInsetsCompat.Type.navigationBars()).bottom
+        // Android's InputMethodService framework already positions the IME window
+        // above the navigation bar. Using WindowInsetsCompat nav bar insets here
+        // double-counts the offset and causes the keyboard to float above the bottom.
+        // We only need to account for the gesture indicator pill on gesture-navigation
+        // phones, which is typically ~24dp. The tappableElement inset excludes the
+        // transparent gesture area and only reports genuinely tappable system UI.
         val tappable = insets.getInsets(WindowInsetsCompat.Type.tappableElement()).bottom
-        val mandatory = insets.getInsets(WindowInsetsCompat.Type.mandatorySystemGestures()).bottom
-        val bottomInset = maxOf(navBars, tappable, mandatory)
+        // On 3-button nav: tappable = nav bar height (but IME framework already above it) → 0 effective
+        // On gesture nav: tappable = 0 (gesture area is not tappable UI)
+        // So we use 0 for the keyboard to sit flush at the bottom of the IME window.
+        val bottomInset = 0
 
         keyboardView?.setBottomInset(bottomInset)
 
