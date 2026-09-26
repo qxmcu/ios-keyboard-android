@@ -179,6 +179,8 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
         val density = resources.displayMetrics.density
         rootLayout = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
+            isHapticFeedbackEnabled = true
+            isSoundEffectsEnabled = true
             layoutParams = ViewGroup.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -259,6 +261,8 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
             actionListener = this@IOSInputMethodService
             audioHapticFeedback = this@IOSInputMethodService.audioHapticFeedback
             preferences = this@IOSInputMethodService.preferences
+            isHapticFeedbackEnabled = true
+            isSoundEffectsEnabled = true
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.MATCH_PARENT,
                 ViewGroup.LayoutParams.WRAP_CONTENT
@@ -274,7 +278,15 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
                 (260 * density).toInt()
             )
             onEmojiSelected = { emoji ->
-                currentInputConnection?.commitText(emoji, 1)
+                val handledAsRichContent = org.iosclone.keyboard.emoji.EmojiStickerHelper.commitEmojiSticker(
+                    this@IOSInputMethodService,
+                    currentInputConnection,
+                    currentInputEditorInfo,
+                    emoji
+                )
+                if (!handledAsRichContent) {
+                    currentInputConnection?.commitText(emoji, 1)
+                }
             }
             onBackspaceClicked = {
                 onDelete()

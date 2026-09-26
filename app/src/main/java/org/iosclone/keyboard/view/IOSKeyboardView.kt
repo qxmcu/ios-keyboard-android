@@ -110,6 +110,7 @@ class IOSKeyboardView @JvmOverloads constructor(
     private var trackpadAccumulatedDx = 0f
 
     // Long press handler
+    private var isLongPressActive = false
     private val mainHandler = Handler(Looper.getMainLooper())
     private val longPressRunnable = Runnable {
         pressedKey?.let { key ->
@@ -122,6 +123,7 @@ class IOSKeyboardView @JvmOverloads constructor(
                 audioHapticFeedback?.performLongPressHaptic(preferences.hapticsEnabled, preferences.hapticsIntensity, this)
                 showLanguageContextMenu()
             } else if (key.accents.isNotEmpty()) {
+                isLongPressActive = true
                 audioHapticFeedback?.performLongPressHaptic(preferences.hapticsEnabled, preferences.hapticsIntensity, this)
                 invalidate()
             }
@@ -131,6 +133,8 @@ class IOSKeyboardView @JvmOverloads constructor(
     init {
         isFocusable = true
         isFocusableInTouchMode = true
+        isHapticFeedbackEnabled = true
+        isSoundEffectsEnabled = true
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         loadIcons()
     }
@@ -232,9 +236,9 @@ class IOSKeyboardView @JvmOverloads constructor(
 
         // 6. Long-press accent popover
         val currentPressed = pressedKey
-        if (currentPressed != null && currentPressed.accents.isNotEmpty() && !isGliding && !isTrackpadMode) {
+        if (currentPressed != null && isLongPressActive && currentPressed.accents.isNotEmpty() && !isGliding && !isTrackpadMode) {
             longPressPopup.draw(canvas, currentPressed, width.toFloat(), currentTheme, density)
-        } else if (currentPressed != null && preferences.keyPopupsEnabled && !isGliding && !isTrackpadMode) {
+        } else if (currentPressed != null && preferences.keyPopupsEnabled && !isGliding && !isTrackpadMode && !isLongPressActive) {
             // 7. Key Magnifier Popup Bubble
             magnifierPopup.draw(canvas, currentPressed, currentTheme, density)
         }
@@ -273,14 +277,6 @@ class IOSKeyboardView @JvmOverloads constructor(
         keyBgPaint.color = surfaceColor
         keyBgPaint.alpha = (255 * alphaMultiplier).toInt()
         canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, keyBgPaint)
-
-        // Specular highlight rim on glass pebble keys
-        if (!isSpecialBlueReturn) {
-            keyStrokePaint.strokeWidth = 0.6f * density
-            keyStrokePaint.color = currentTheme.keyboardGlassStroke
-            keyStrokePaint.alpha = (255 * alphaMultiplier).toInt()
-            canvas.drawRoundRect(bounds, cornerRadius, cornerRadius, keyStrokePaint)
-        }
 
         // Key Content (Icon or Label)
         when (key.keyType) {
@@ -391,6 +387,8 @@ class IOSKeyboardView @JvmOverloads constructor(
                 glideStartY = y
                 isGliding = false
                 isTrackpadMode = false
+                isLongPressActive = false
+                longPressPopup.dismiss()
                 gestureTrailRenderer.clear()
 
                 // Check one-handed docking toggle
@@ -426,7 +424,7 @@ class IOSKeyboardView @JvmOverloads constructor(
                     return true
                 }
 
-                if (longPressPopup.isShowing()) {
+                if (isLongPressActive && longPressPopup.isShowing()) {
                     longPressPopup.updateSelection(x)
                     invalidate()
                     return true
@@ -450,6 +448,8 @@ class IOSKeyboardView @JvmOverloads constructor(
                 val key = l.findKeyAt(x, y)
                 if (key != pressedKey && !isGliding) {
                     pressedKey = key
+                    isLongPressActive = false
+                    longPressPopup.dismiss()
                     mainHandler.removeCallbacks(longPressRunnable)
                     if (key != null) {
                         mainHandler.postDelayed(longPressRunnable, 350)
@@ -464,12 +464,13 @@ class IOSKeyboardView @JvmOverloads constructor(
 
                 if (isTrackpadMode) {
                     isTrackpadMode = false
+                    isLongPressActive = false
                     pressedKey = null
                     invalidate()
                     return true
                 }
 
-                if (longPressPopup.isShowing()) {
+                if (isLongPressActive && longPressPopup.isShowing()) {
                     val key = pressedKey
                     if (key != null) {
                         val selectedAccent = longPressPopup.getSelectedCharacter(key)
@@ -478,10 +479,14 @@ class IOSKeyboardView @JvmOverloads constructor(
                         }
                     }
                     longPressPopup.dismiss()
+                    isLongPressActive = false
                     pressedKey = null
                     invalidate()
                     return true
                 }
+
+                isLongPressActive = false
+                longPressPopup.dismiss()
 
                 if (isGliding) {
                     isGliding = false
@@ -508,6 +513,7 @@ class IOSKeyboardView @JvmOverloads constructor(
 
             MotionEvent.ACTION_CANCEL -> {
                 mainHandler.removeCallbacks(longPressRunnable)
+                isLongPressActive = false
                 longPressPopup.dismiss()
                 gestureTrailRenderer.clear()
                 isGliding = false
