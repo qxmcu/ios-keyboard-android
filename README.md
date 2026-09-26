@@ -50,18 +50,17 @@ Hold the `space` bar for >350ms to turn the entire keyboard canvas into a fluid 
 
 | Feature | Specification |
 |---|---|
-| **Direct Canvas Rendering** | Single-view custom canvas with zero XML View overhead. Sub-50ms cold startup, 60/120Hz typing response. |
-| **Authentic iOS Geometry** | 5dp corner radii, 1.2dp physical elevation drop shadows, 6dp horizontal key pitch, 10dp vertical row gap. |
-| **Themes** | **iOS Light** (`#D1D5DB` chassis, `#FFFFFF` keys) & **iOS Dark** (`#1C1C1E` chassis, `#2C2C2E` keys) with automatic system night-mode sync. |
-| **Keystroke Audio** | Low-latency Android `SoundPool` loaded with uncompressed 16-bit PCM clicks (standard, delete, and return/space). |
-| **Apple Taptic Engine** | `VibrationEffect.createOneShot` micro-impulse waveforms tailored per keystroke type with intensity slider. |
-| **Decoupled Apple Emoji Engine** | Bundled font loader ensuring authentic iOS glyph representation across Samsung, Xiaomi, and Google devices. |
-| **Full Emoji Picker** | iOS category strip (Recents, Smileys, People, Animals, Food, Travel, Activities, Objects, Symbols, Flags), real-time search, and skin tone selector popup. |
-| **Autocorrect & Predictions** | Offline Trie database with SymSpell Levenshtein edit-distance fuzzy autocorrection and persistent learning. |
+| **Liquid Glass Blur** | iOS 27 Clear Liquid Glass & Tinted Glass with hardware-accelerated `FLAG_BLUR_BEHIND` window blur on Android 12+ (API 31+). |
+| **Authentic iOS Pebble Geometry** | 8.5dp pebble corner radii, ambient drop shadows, specular iridescent glass rim highlights, 42dp floating bottom bar. |
+| **Themes** | **iOS 27 Light** (`#73E8ECF2` frosted canvas, `#E6FFFFFF` white pebbles) & **iOS 27 Dark** (`#8A18181C` charcoal canvas, `#8C444448` slate pebbles) with auto night sync. |
+| **Universal Adaptive Layout** | Zero Samsung navigation bar overlap; dynamic ergonomic scaling for Samsung Ultra, Nothing Phone, Pixel, foldables, and tablets. |
+| **iOS 26.4 Apple Color Emojis** | Decoupled bundled AppleColorEmoji font (Unicode 17.0) rendering authentic Apple emoji artwork rootless on all devices. |
+| **Apple Intelligence Writing Tools** | Proofread, Rewrite (Friendly, Professional, Concise), Summarize, and Genmoji via offline bottom sheet tools. |
+| **Voice Dictation & Siri Waveform** | Hands-free dictation with voice commands ("delete last word", "new paragraph") and real-time animated Siri audio wave. |
+| **Quantized Language Autocorrect** | N-gram language model, spatial adjacent-key penalty, contraction fixer, and single-tap backspace undo. |
+| **Keystroke Audio & Taptic Haptics** | Low-latency Android `SoundPool` clicks and `VibrationEffect` micro-impulse waveforms tailored per keystroke. |
 | **Continuous Glide Typing** | Translucent blue bezier curve trail with topological path character scoring. |
 | **Clipboard History Manager** | SQLite clipboard history drawer with pinning, deletion, and instant one-tap suggestion chips in the top strip. |
-| **Inline Translation** | Real-time translation toolbar supporting offline phrase pairs and pluggable LibreTranslate endpoints. |
-| **One-Handed Ergonomics** | Left-docked and right-docked one-handed modes with instant toggle buttons. |
 | **iOS Settings App** | Modern Jetpack Compose UI clone of iOS Settings for extensive customization. |
 
 ---
