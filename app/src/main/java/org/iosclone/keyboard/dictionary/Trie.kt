@@ -73,15 +73,18 @@ class Trie {
 
     /**
      * Fuzzy search for autocorrection (SymSpell-style / Levenshtein search in Trie).
-     * Finds candidates within maxCost edits (1 or 2).
+     * Finds candidates within maxCost edits (1 or 2) with hard bounded execution.
      */
     fun searchFuzzy(word: String, maxCost: Int = 2, limit: Int = 5): List<Pair<String, Int>> {
         val target = word.lowercase()
+        if (target.isEmpty() || target.length > 32) return emptyList()
         val currentRow = IntArray(target.length + 1) { it }
         val results = mutableListOf<Pair<String, Int>>()
+        var iterations = 0
 
         for ((ch, child) in root.children) {
-            searchRecursive(child, ch, target, currentRow, results, maxCost, StringBuilder().append(ch))
+            iterations = searchRecursive(child, ch, target, currentRow, results, maxCost, StringBuilder().append(ch), iterations)
+            if (iterations >= 600 || results.size >= 25) break
         }
 
         return results.sortedWith(
@@ -97,8 +100,12 @@ class Trie {
         previousRow: IntArray,
         results: MutableList<Pair<String, Int>>,
         maxCost: Int,
-        currentWord: StringBuilder
-    ) {
+        currentWord: StringBuilder,
+        currentIterations: Int
+    ): Int {
+        var iter = currentIterations + 1
+        if (iter >= 600 || results.size >= 25) return iter
+
         val columns = target.length + 1
         val currentRow = IntArray(columns)
         currentRow[0] = previousRow[0] + 1
@@ -118,17 +125,18 @@ class Trie {
 
         if (currentRow[columns - 1] <= maxCost && node.isWord) {
             results.add(Pair(currentWord.toString(), node.frequency))
-            if (results.size >= 40) return
+            if (results.size >= 25) return iter
         }
 
-        if (minRowValue <= maxCost && results.size < 40) {
+        if (minRowValue <= maxCost && results.size < 25 && iter < 600) {
             for ((nextCh, child) in node.children) {
                 currentWord.append(nextCh)
-                searchRecursive(child, nextCh, target, currentRow, results, maxCost, currentWord)
+                iter = searchRecursive(child, nextCh, target, currentRow, results, maxCost, currentWord, iter)
                 currentWord.deleteCharAt(currentWord.length - 1)
-                if (results.size >= 40) break
+                if (results.size >= 25 || iter >= 600) break
             }
         }
+        return iter
     }
 
     private fun levenshteinDistance(s1: String, s2: String): Int {

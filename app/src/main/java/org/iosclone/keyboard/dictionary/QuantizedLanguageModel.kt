@@ -19,7 +19,7 @@ class QuantizedLanguageModel(private val context: Context? = null) {
 
     // Dynamic user-learned bigrams: prevWord -> (nextWord -> frequency)
     private val dynamicUserBigrams = mutableMapOf<String, MutableMap<String, Int>>()
-    private val userDb = context?.let { UserDictionaryDb(it) }
+    private val userDb = context?.let { UserDictionaryDb.getInstance(it) }
 
     init {
         loadConversationalCorpus()

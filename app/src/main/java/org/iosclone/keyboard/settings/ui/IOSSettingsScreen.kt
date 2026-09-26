@@ -617,6 +617,48 @@ fun IOSSettingsScreen(prefs: KeyboardPreferences) {
                 )
             }
 
+            // Section 11: Data Management & Uninstall
+            IOSSectionHeader(title = "Data Management & Uninstall")
+            IOSGroupedCard {
+                IOSSettingsActionRow(
+                    title = "Backup Learned Data",
+                    subtitle = "Saves learned vocabulary and habits to Documents/iOSKeyboard",
+                    onClick = {
+                        val count = org.iosclone.keyboard.dictionary.UserDictionaryBackupHelper.backup(
+                            context,
+                            org.iosclone.keyboard.dictionary.UserDictionaryDb.getInstance(context)
+                        )
+                        Toast.makeText(context, "Backed up $count learned items to Documents/iOSKeyboard", Toast.LENGTH_LONG).show()
+                    }
+                )
+                IOSSettingsActionRow(
+                    title = "Uninstall iOS Keyboard",
+                    subtitle = "Safely uninstalls app with automatic data backup",
+                    titleColor = Color(0xFFFF3B30),
+                    showChevron = true,
+                    showDivider = false,
+                    onClick = {
+                        AlertDialog.Builder(context)
+                            .setTitle("Uninstall iOS Keyboard?")
+                            .setMessage("Your learned vocabulary, autocorrect habits, and custom dictionaries will be safely backed up to Documents/iOSKeyboard so you will NOT lose them if you reinstall.\n\nProceed to uninstall?")
+                            .setPositiveButton("Backup & Uninstall") { _, _ ->
+                                org.iosclone.keyboard.dictionary.UserDictionaryBackupHelper.backup(
+                                    context,
+                                    org.iosclone.keyboard.dictionary.UserDictionaryDb.getInstance(context)
+                                )
+                                Toast.makeText(context, "Autocorrect data preserved. Launching uninstaller...", Toast.LENGTH_SHORT).show()
+                                val uninstallIntent = Intent(Intent.ACTION_DELETE).apply {
+                                    data = android.net.Uri.parse("package:${context.packageName}")
+                                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                                }
+                                context.startActivity(uninstallIntent)
+                            }
+                            .setNegativeButton("Cancel", null)
+                            .show()
+                    }
+                )
+            }
+
             Spacer(modifier = Modifier.height(36.dp))
         }
     }

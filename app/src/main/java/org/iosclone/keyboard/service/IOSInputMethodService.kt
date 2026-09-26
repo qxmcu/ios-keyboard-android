@@ -499,48 +499,53 @@ class IOSInputMethodService : InputMethodService(), KeyboardActionListener {
     }
 
     private fun checkCursorWordForSuggestions() {
-        val ic = currentInputConnection ?: return
-        val textBefore = ic.getTextBeforeCursor(40, 0)?.toString() ?: ""
-        val textAfter = ic.getTextAfterCursor(40, 0)?.toString() ?: ""
+        try {
+            val ic = currentInputConnection ?: return
+            val textBefore = ic.getTextBeforeCursor(40, 0)?.toString() ?: ""
+            val textAfter = ic.getTextAfterCursor(40, 0)?.toString() ?: ""
 
-        val wordBefore = textBefore.takeLastWhile { it.isLetter() || it == '\'' }
-        val wordAfter = textAfter.takeWhile { it.isLetter() || it == '\'' }
-        val currentWord = (wordBefore + wordAfter).trim()
+            val wordBefore = textBefore.takeLastWhile { it.isLetter() || it == '\'' }
+            val wordAfter = textAfter.takeWhile { it.isLetter() || it == '\'' }
+            val currentWord = (wordBefore + wordAfter).trim()
 
-        if (currentWord.length >= 2) {
-            val trie = dictionaryEngine.getTrie(currentLanguage)
-            val isKnown = trie?.contains(currentWord.lowercase()) == true
-            val undoRecord = dictionaryEngine.undoManager.shouldUndoOnDelete(textBefore)
+            if (currentWord.length >= 2) {
+                val trie = dictionaryEngine.getTrie(currentLanguage)
+                val isKnown = trie?.contains(currentWord.lowercase()) == true
+                val undoRecord = dictionaryEngine.undoManager.shouldUndoOnDelete(textBefore)
 
-            if (!isKnown || undoRecord != null) {
-                val suggestions = trie?.searchFuzzy(currentWord.lowercase(), maxCost = 2, limit = 3)?.map { it.first } ?: emptyList()
-                if (suggestions.isNotEmpty() || undoRecord != null) {
-                    val anchor = rootFrame ?: rootLayout ?: return
-                    spellingCalloutView?.showCallout(
-                        anchorView = anchor,
-                        word = currentWord,
-                        candidates = suggestions,
-                        revertOption = undoRecord?.originalTyped,
-                        theme = currentTheme,
-                        onCandidateSelected = { chosen ->
-                            ic.deleteSurroundingText(wordBefore.length, wordAfter.length)
-                            ic.commitText(chosen, 1)
-                            dictionaryEngine.onWordCommitted(chosen)
-                            spellingCalloutView?.dismiss()
-                            updateNextWordPredictions()
-                        },
-                        onNeverAutocorrect = { ignored ->
-                            dictionaryEngine.undoManager.ignoreWordPermanently(ignored)
-                            dictionaryEngine.onWordCommitted(ignored)
-                            spellingCalloutView?.dismiss()
-                            updateNextWordPredictions()
-                        }
-                    )
-                    return
+                if (!isKnown || undoRecord != null) {
+                    val suggestions = dictionaryEngine.getFuzzySuggestions(currentWord, limit = 3)
+                    if (suggestions.isNotEmpty() || undoRecord != null) {
+                        val anchor = rootFrame ?: rootLayout ?: return
+                        if (!anchor.isAttachedToWindow || anchor.windowToken == null) return
+                        spellingCalloutView?.showCallout(
+                            anchorView = anchor,
+                            word = currentWord,
+                            candidates = suggestions,
+                            revertOption = undoRecord?.originalTyped,
+                            theme = currentTheme,
+                            onCandidateSelected = { chosen ->
+                                ic.deleteSurroundingText(wordBefore.length, wordAfter.length)
+                                ic.commitText(chosen, 1)
+                                dictionaryEngine.onWordCommitted(chosen)
+                                spellingCalloutView?.dismiss()
+                                updateNextWordPredictions()
+                            },
+                            onNeverAutocorrect = { ignored ->
+                                dictionaryEngine.undoManager.ignoreWordPermanently(ignored)
+                                dictionaryEngine.onWordCommitted(ignored)
+                                spellingCalloutView?.dismiss()
+                                updateNextWordPredictions()
+                            }
+                        )
+                        return
+                    }
                 }
             }
+            spellingCalloutView?.dismiss()
+        } catch (e: Exception) {
+            Log.e(tag, "checkCursorWordForSuggestions handled safely", e)
         }
-        spellingCalloutView?.dismiss()
     }
 
     private fun applyBottomInsets(insets: WindowInsetsCompat) {

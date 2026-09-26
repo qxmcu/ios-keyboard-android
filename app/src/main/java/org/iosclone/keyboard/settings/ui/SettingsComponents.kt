@@ -170,6 +170,7 @@ fun IOSSettingsActionRow(
     title: String,
     subtitle: String? = null,
     trailingText: String? = null,
+    titleColor: Color? = null,
     onClick: () -> Unit,
     showChevron: Boolean = true,
     showDivider: Boolean = true
@@ -191,7 +192,7 @@ fun IOSSettingsActionRow(
             verticalAlignment = Alignment.CenterVertically
         ) {
             Column(modifier = Modifier.weight(1f)) {
-                Text(text = title, fontSize = 16.sp, color = primaryText)
+                Text(text = title, fontSize = 16.sp, color = titleColor ?: primaryText)
                 if (subtitle != null) {
                     Text(
                         text = subtitle,
