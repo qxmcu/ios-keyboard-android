@@ -187,9 +187,9 @@ class AudioHapticFeedback(private val context: Context) {
                     SoundType.DELETE -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
                     SoundType.RETURN_SPACE -> VibrationEffect.createPredefined(VibrationEffect.EFFECT_CLICK)
                 }
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     val attrs = VibrationAttributes.Builder()
-                        .setUsage(VibrationAttributes.USAGE_IME_FEEDBACK)
+                        .setUsage(VibrationAttributes.USAGE_TOUCH)
                         .build()
                     vib.vibrate(effect, attrs)
                 } else {
@@ -246,9 +246,9 @@ class AudioHapticFeedback(private val context: Context) {
         try {
             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                 val effect = VibrationEffect.createPredefined(VibrationEffect.EFFECT_HEAVY_CLICK)
-                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
                     val attrs = VibrationAttributes.Builder()
-                        .setUsage(VibrationAttributes.USAGE_IME_FEEDBACK)
+                        .setUsage(VibrationAttributes.USAGE_TOUCH)
                         .build()
                     vib.vibrate(effect, attrs)
                 } else {
