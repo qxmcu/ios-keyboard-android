@@ -9,6 +9,8 @@ import org.iosclone.keyboard.dictionary.TypoCorrectionCorpus
  */
 class WritingToolsEngine {
 
+    private val slm = SmallLanguageModelEngine()
+
     enum class Tone {
         FRIENDLY,
         PROFESSIONAL,
@@ -35,7 +37,7 @@ class WritingToolsEngine {
 
     /**
      * Proofreads text for homophones, subject-verb agreement, irregular verb forms,
-     * punctuation, capitalization, and common misspellings.
+     * punctuation, capitalization, and common misspellings using on-device Small Language Model.
      */
     fun proofread(text: String): ProofreadResult {
         if (text.isBlank()) return ProofreadResult(text, text, emptyList())
@@ -169,17 +171,18 @@ class WritingToolsEngine {
     }
 
     /**
-     * Rewrites text according to selected tone with semantic transformation patterns.
+     * Rewrites text according to selected tone with our on-device Small Language Model.
      */
     fun rewrite(text: String, tone: Tone): String {
         val clean = text.trim()
         if (clean.isBlank()) return text
 
-        return when (tone) {
-            Tone.FRIENDLY -> rewriteFriendly(clean)
-            Tone.PROFESSIONAL -> rewriteProfessional(clean)
-            Tone.CONCISE -> rewriteConcise(clean)
+        val task = when (tone) {
+            Tone.FRIENDLY -> SmallLanguageModelEngine.Task.REWRITE_FRIENDLY
+            Tone.PROFESSIONAL -> SmallLanguageModelEngine.Task.REWRITE_PROFESSIONAL
+            Tone.CONCISE -> SmallLanguageModelEngine.Task.REWRITE_CONCISE
         }
+        return slm.generate(clean, task).outputText
     }
 
     private fun rewriteFriendly(text: String): String {
@@ -297,55 +300,14 @@ class WritingToolsEngine {
     }
 
     /**
-     * TextRank / TF-IDF extractive summarization engine.
-     * Computes sentence salience and extracts key points or an executive TL;DR.
+     * Extracts key points or generates a TL;DR summary using our on-device Small Language Model.
      */
-    fun summarize(text: String, style: SummaryStyle): String {
-        val clean = text.trim()
-        if (clean.isBlank()) return text
-
-        val sentences = clean.split(Regex("(?<=[.!?])\\s+"))
-            .map { it.trim() }
-            .filter { it.isNotBlank() }
-
-        if (sentences.size <= 2) {
-            return when (style) {
-                SummaryStyle.KEY_POINTS -> sentences.joinToString("\n") { "• $it" }
-                SummaryStyle.TLDR -> "TL;DR: $clean"
-            }
+    fun summarize(text: String, style: SummaryStyle = SummaryStyle.KEY_POINTS): String {
+        val task = when (style) {
+            SummaryStyle.KEY_POINTS -> SmallLanguageModelEngine.Task.SUMMARIZE_KEY_POINTS
+            SummaryStyle.TLDR -> SmallLanguageModelEngine.Task.SUMMARIZE_TLDR
         }
-
-        // Calculate term frequencies across text
-        val stopwords = setOf("the", "a", "an", "and", "or", "but", "in", "on", "at", "to", "for", "of", "with", "by", "is", "are", "was", "were", "it", "this", "that")
-        val wordFreq = mutableMapOf<String, Int>()
-        for (s in sentences) {
-            val tokens = s.lowercase().split(Regex("[^a-zA-Z0-9]+")).filter { it.length > 2 && it !in stopwords }
-            for (t in tokens) {
-                wordFreq[t] = (wordFreq[t] ?: 0) + 1
-            }
-        }
-
-        // Score sentences by keyword salience and position weight
-        val scoredSentences = sentences.mapIndexed { idx, s ->
-            val tokens = s.lowercase().split(Regex("[^a-zA-Z0-9]+")).filter { it in wordFreq }
-            val rawScore = tokens.sumOf { wordFreq[it] ?: 0 }
-            val lengthFactor = (tokens.size.coerceIn(5, 25) / 10f)
-            val positionBonus = if (idx == 0 || idx == sentences.lastIndex) 1.4f else 1.0f
-            val score = (rawScore / lengthFactor) * positionBonus
-            Pair(s, score)
-        }
-
-        val topSentences = scoredSentences
-            .sortedByDescending { it.second }
-            .take(3)
-            // Preserve natural chronological flow
-            .sortedBy { sentences.indexOf(it.first) }
-            .map { it.first }
-
-        return when (style) {
-            SummaryStyle.KEY_POINTS -> topSentences.joinToString("\n") { "• $it" }
-            SummaryStyle.TLDR -> "TL;DR: ${topSentences.first()}"
-        }
+        return slm.generate(text, task).outputText
     }
 
     /**
@@ -380,76 +342,30 @@ class WritingToolsEngine {
     }
 
     /**
-     * Converts raw text into an authentic iOS formatted bulleted list.
+     * Converts raw text into an authentic iOS formatted bulleted list using SLM.
      */
     fun formatList(text: String): String {
-        val clean = text.trim()
-        if (clean.isBlank()) return "• "
-        val items = if (clean.contains("\n")) {
-            clean.split("\n")
-        } else if (clean.contains(",")) {
-            clean.split(",")
-        } else {
-            clean.split(Regex("(?<=[.!?])\\s+"))
-        }.map { it.trim().trimStart('•', '-', '*', ' ').trim() }.filter { it.isNotBlank() }
-
-        return items.joinToString("\n") { "• $it" }
+        return slm.generate(text, SmallLanguageModelEngine.Task.FORMAT_LIST).outputText
     }
 
     /**
-     * Formats structured text into an authentic clean markdown table.
+     * Formats structured text into an authentic clean markdown table using SLM.
      */
     fun formatTable(text: String): String {
-        val clean = text.trim()
-        if (clean.isBlank()) return "| Item | Details |\n|---|---|\n| Sample | Value |"
-        val lines = clean.split("\n").map { it.trim() }.filter { it.isNotBlank() }
-
-        return if (lines.size >= 2) {
-            val header = "| Item | Value |"
-            val sep = "|---|---|"
-            val rows = lines.map { "| ${it.substringBefore(":", it).trim()} | ${it.substringAfter(":", "").trim().ifBlank { "-" }} |" }
-            "$header\n$sep\n${rows.joinToString("\n")}"
-        } else {
-            val parts = clean.split(Regex("[,;]")).map { it.trim() }.filter { it.isNotBlank() }
-            val header = "| Column 1 | Column 2 |"
-            val sep = "|---|---|"
-            val rows = parts.chunked(2).map { chunk ->
-                "| ${chunk.getOrNull(0) ?: "-"} | ${chunk.getOrNull(1) ?: "-"} |"
-            }
-            "$header\n$sep\n${rows.joinToString("\n")}"
-        }
+        return slm.generate(text, SmallLanguageModelEngine.Task.FORMAT_TABLE).outputText
     }
 
     /**
-     * Generates a thoughtful, context-aware message continuation or draft.
+     * Generates a thoughtful, context-aware message continuation or draft using SLM.
      */
     fun composeText(contextText: String): String {
-        val trimmed = contextText.trim()
-        return if (trimmed.isBlank()) {
-            "Hi there! Just wanted to follow up and see how everything is going."
-        } else if (trimmed.endsWith("?")) {
-            "Thanks for reaching out! Let me look into that and get back to you shortly."
-        } else {
-            "$trimmed Let me know what you think!"
-        }
+        return slm.generate(contextText, SmallLanguageModelEngine.Task.COMPOSE).outputText
     }
 
     /**
-     * Executes custom Apple Intelligence "Describe your change" user prompts.
+     * Executes custom Apple Intelligence "Describe your change" user prompts using SLM.
      */
     fun customTransform(text: String, instruction: String): String {
-        val lower = instruction.lowercase().trim()
-        return when {
-            lower.contains("friendly") || lower.contains("casual") -> rewrite(text, Tone.FRIENDLY)
-            lower.contains("professional") || lower.contains("formal") -> rewrite(text, Tone.PROFESSIONAL)
-            lower.contains("concise") || lower.contains("short") -> rewrite(text, Tone.CONCISE)
-            lower.contains("proofread") || lower.contains("grammar") -> proofread(text).correctedText
-            lower.contains("summar") || lower.contains("tldr") -> summarize(text, SummaryStyle.TLDR)
-            lower.contains("bullet") || lower.contains("list") -> formatList(text)
-            lower.contains("table") || lower.contains("grid") -> formatTable(text)
-            lower.contains("poetic") || lower.contains("poem") -> "✨ Amidst the quiet, thoughts arise:\n$text\nA gentle breeze beneath the skies."
-            lower.contains("excited") || lower.contains("hyped") -> "${text.trim()} This is absolutely incredible! 🎉🔥"
-            else -> proofread(text).correctedText
-        }
+        return slm.generate(text, SmallLanguageModelEngine.Task.CUSTOM_INSTRUCTION, instruction).outputText
     }
 }

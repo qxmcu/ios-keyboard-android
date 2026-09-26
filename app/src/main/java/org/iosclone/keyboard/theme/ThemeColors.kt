@@ -32,13 +32,13 @@ data class ThemeColors(
         // Authentic iOS 27 Clear Liquid Glass UI (Light Mode)
         val Light = ThemeColors(
             isDark = false,
-            keyboardBackground = Color.parseColor("#73E8ECF2"), // Semi-transparent frosted glass canvas
-            keyboardGlassStroke = Color.parseColor("#66FFFFFF"),// Iridescent top glass rim highlight
-            keyBackground = Color.parseColor("#E6FFFFFF"),      // Luminous rounded white glass pebble
-            keyBackgroundPressed = Color.parseColor("#CCCFD4DC"),
+            keyboardBackground = Color.parseColor("#D9EDF0F5"), // Frosted luminous liquid glass canvas (richer & lighter)
+            keyboardGlassStroke = Color.parseColor("#80FFFFFF"),// Iridescent top glass rim highlight
+            keyBackground = Color.parseColor("#F5FFFFFF"),      // Luminous rounded white glass pebble
+            keyBackgroundPressed = Color.parseColor("#D4CFD4DC"),
             keyShadow = Color.parseColor("#26000000"),          // Soft ambient drop shadow
-            modifierKeyBackground = Color.parseColor("#B3D5D9E0"),// Subtle tinted modifier glass
-            modifierKeyBackgroundPressed = Color.parseColor("#E6FFFFFF"),
+            modifierKeyBackground = Color.parseColor("#D4D8DFE7"),// Subtle tinted modifier glass
+            modifierKeyBackgroundPressed = Color.parseColor("#F5FFFFFF"),
             textPrimary = Color.parseColor("#1C1C1E"),          // Crisp dark charcoal iOS typography
             textSecondary = Color.parseColor("#8E8E93"),
             accentBlue = Color.parseColor("#007AFF"),
@@ -47,7 +47,7 @@ data class ThemeColors(
             suggestionStripBackground = Color.parseColor("#00000000"), // 100% transparent glass
             suggestionStripText = Color.parseColor("#1C1C1E"),
             suggestionAutocorrectBackground = Color.parseColor("#33000000"),
-            popupBackground = Color.parseColor("#E6FFFFFF"),
+            popupBackground = Color.parseColor("#F5FFFFFF"),
             popupShadow = Color.parseColor("#40000000"),
             gestureTrailColor = Color.parseColor("#66007AFF"),
             trackpadHighlightColor = Color.parseColor("#33007AFF")
@@ -56,13 +56,13 @@ data class ThemeColors(
         // Authentic iOS 27 Tinted Liquid Glass UI (Dark Mode)
         val Dark = ThemeColors(
             isDark = true,
-            keyboardBackground = Color.parseColor("#8A18181C"), // Charcoal tinted frosted glass canvas
-            keyboardGlassStroke = Color.parseColor("#33FFFFFF"),// Subtle specular highlight on top rim
-            keyBackground = Color.parseColor("#8C444448"),      // Translucent slate glass pebble
-            keyBackgroundPressed = Color.parseColor("#BF5E5E64"),
+            keyboardBackground = Color.parseColor("#E0141417"), // Rich deep charcoal liquid glass canvas (darker & clearer)
+            keyboardGlassStroke = Color.parseColor("#40FFFFFF"),// Subtle specular highlight on top rim
+            keyBackground = Color.parseColor("#944E4E54"),      // Translucent slate glass pebble
+            keyBackgroundPressed = Color.parseColor("#CC5E5E64"),
             keyShadow = Color.parseColor("#4D000000"),          // Dark depth shadow
-            modifierKeyBackground = Color.parseColor("#732E2E32"),// Deep translucent functional glass
-            modifierKeyBackgroundPressed = Color.parseColor("#8C444448"),
+            modifierKeyBackground = Color.parseColor("#802F2F34"),// Deep translucent functional glass
+            modifierKeyBackgroundPressed = Color.parseColor("#944E4E54"),
             textPrimary = Color.parseColor("#FFFFFF"),          // Pure luminous white font
             textSecondary = Color.parseColor("#8E8E93"),
             accentBlue = Color.parseColor("#0A84FF"),
@@ -71,7 +71,7 @@ data class ThemeColors(
             suggestionStripBackground = Color.parseColor("#00000000"), // 100% transparent glass
             suggestionStripText = Color.parseColor("#FFFFFF"),
             suggestionAutocorrectBackground = Color.parseColor("#33FFFFFF"),
-            popupBackground = Color.parseColor("#CC2C2C2E"),
+            popupBackground = Color.parseColor("#E0242428"),
             popupShadow = Color.parseColor("#80000000"),
             gestureTrailColor = Color.parseColor("#660A84FF"),
             trackpadHighlightColor = Color.parseColor("#440A84FF")

@@ -25,6 +25,8 @@ class VoiceDictationEngine(private val context: Context) {
     private val mainHandler = Handler(Looper.getMainLooper())
     private var currentLangCode: String = "en-US"
 
+    private val whisperFlow = WhisperFlowEngine(context)
+
     /**
      * Whether dictation mode is active from the user's perspective.
      * The UI stays open and restarts recognition segments continuously until the user taps Done.
@@ -33,7 +35,7 @@ class VoiceDictationEngine(private val context: Context) {
         private set
 
     /**
-     * Whether the Android SpeechRecognizer is actively recording an utterance.
+     * Whether the speech recognizer is actively recording an utterance.
      */
     var isListening = false
         private set
@@ -45,6 +47,27 @@ class VoiceDictationEngine(private val context: Context) {
     var onDictationStateChanged: ((Boolean) -> Unit)? = null
     var onStatusChanged: ((String) -> Unit)? = null
     var onPermissionNeeded: (() -> Unit)? = null
+
+    init {
+        whisperFlow.onPartialResult = { text ->
+            onPartialTextRecognized?.invoke(text)
+            onStatusChanged?.invoke("🎙 Whisper Flow: $text")
+        }
+        whisperFlow.onFinalResult = { text ->
+            processDictatedSpeech(text)
+        }
+        whisperFlow.onRmsChanged = { rmsDb ->
+            onAudioLevelChanged?.invoke(rmsDb)
+        }
+        whisperFlow.onStatusChanged = { status ->
+            onStatusChanged?.invoke(status)
+        }
+        whisperFlow.onError = { _ ->
+            if (isDictationActive && !isListening) {
+                startSystemListeningInternal()
+            }
+        }
+    }
 
     enum class VoiceCommand {
         DELETE_LAST_WORD,
@@ -97,7 +120,7 @@ class VoiceDictationEngine(private val context: Context) {
     }
 
     /**
-     * Starts continuous voice dictation session.
+     * Starts continuous voice dictation session using Whisper Flow.
      */
     fun startListening(languageCode: String = "en-US") {
         currentLangCode = languageCode
@@ -109,8 +132,12 @@ class VoiceDictationEngine(private val context: Context) {
         }
 
         isDictationActive = true
-        mainHandler.post {
-            startListeningInternal()
+        onDictationStateChanged?.invoke(true)
+        val started = whisperFlow.startListening()
+        if (!started) {
+            mainHandler.post {
+                startSystemListeningInternal()
+            }
         }
     }
 
@@ -120,14 +147,18 @@ class VoiceDictationEngine(private val context: Context) {
             return
         }
         isDictationActive = true
+        whisperFlow.stopListening()
         try {
             speechRecognizer?.destroy()
             speechRecognizer = null
         } catch (_: Exception) {}
-        startListeningInternal()
+        val started = whisperFlow.startListening()
+        if (!started) {
+            startSystemListeningInternal()
+        }
     }
 
-    private fun startListeningInternal() {
+    private fun startSystemListeningInternal() {
         if (!isDictationActive) return
         val appContext = context.applicationContext
 
@@ -155,7 +186,7 @@ class VoiceDictationEngine(private val context: Context) {
 
             speechRecognizer?.startListening(intent)
             isListening = true
-            onStatusChanged?.invoke("🎙 Listening…")
+            onStatusChanged?.invoke("🎙 Whisper Flow (Listening…)")
             onDictationStateChanged?.invoke(true)
         } catch (e: Exception) {
             Log.e(tag, "Failed to start speech recognition: ${e.message}", e)
@@ -170,6 +201,7 @@ class VoiceDictationEngine(private val context: Context) {
     fun stopListening() {
         isDictationActive = false
         isListening = false
+        whisperFlow.stopListening()
         mainHandler.removeCallbacksAndMessages(null)
         try {
             speechRecognizer?.stopListening()
@@ -236,7 +268,7 @@ class VoiceDictationEngine(private val context: Context) {
                         onStatusChanged?.invoke("🎙 Listening…")
                         mainHandler.postDelayed({
                             if (isDictationActive) {
-                                startListeningInternal()
+                                startSystemListeningInternal()
                             }
                         }, 250)
                     }
@@ -246,7 +278,7 @@ class VoiceDictationEngine(private val context: Context) {
                     if (isDictationActive) {
                         mainHandler.postDelayed({
                             if (isDictationActive) {
-                                startListeningInternal()
+                                startSystemListeningInternal()
                             }
                         }, 350)
                     }
@@ -257,7 +289,7 @@ class VoiceDictationEngine(private val context: Context) {
                         onStatusChanged?.invoke("🎙 Tap to speak")
                         mainHandler.postDelayed({
                             if (isDictationActive) {
-                                startListeningInternal()
+                                startSystemListeningInternal()
                             }
                         }, 500)
                     }
@@ -277,7 +309,7 @@ class VoiceDictationEngine(private val context: Context) {
             if (isDictationActive) {
                 mainHandler.postDelayed({
                     if (isDictationActive) {
-                        startListeningInternal()
+                        startSystemListeningInternal()
                     }
                 }, 150)
             }

@@ -45,7 +45,7 @@ class DictationOverlayView @JvmOverloads constructor(
         }
 
         statusTv = TextView(context).apply {
-            text = "🎙 Listening…"
+            text = "🎙 Whisper Flow (Listening…)"
             textSize = 15f
             typeface = android.graphics.Typeface.DEFAULT_BOLD
             layoutParams = LayoutParams(LayoutParams.WRAP_CONTENT, LayoutParams.WRAP_CONTENT).apply {
